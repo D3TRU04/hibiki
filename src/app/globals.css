@@ -1,0 +1,272 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+/* Custom animations for Kleo intro */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+
+/* Space background with stars */
+.space-background {
+  background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.space-background::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(2px 2px at 20px 30px, #eee, transparent),
+    radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 90px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 130px 80px, rgba(255,255,255,0.6), transparent),
+    radial-gradient(2px 2px at 160px 30px, #ddd, transparent),
+    radial-gradient(2px 2px at 200px 70px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 250px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 290px 80px, rgba(255,255,255,0.6), transparent),
+    radial-gradient(2px 2px at 320px 30px, #ddd, transparent),
+    radial-gradient(2px 2px at 360px 70px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 410px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 450px 80px, rgba(255,255,255,0.6), transparent),
+    radial-gradient(2px 2px at 480px 30px, #ddd, transparent),
+    radial-gradient(2px 2px at 520px 70px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 570px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 610px 80px, rgba(255,255,255,0.6), transparent),
+    radial-gradient(2px 2px at 640px 30px, #ddd, transparent),
+    radial-gradient(2px 2px at 680px 70px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 730px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 770px 80px, rgba(255,255,255,0.6), transparent),
+    radial-gradient(2px 2px at 800px 30px, #ddd, transparent),
+    radial-gradient(2px 2px at 840px 70px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 890px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 930px 80px, rgba(255,255,255,0.6), transparent),
+    radial-gradient(2px 2px at 960px 30px, #ddd, transparent),
+    radial-gradient(2px 2px at 1000px 70px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 1050px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 1090px 80px, rgba(255,255,255,0.6), transparent),
+    radial-gradient(2px 2px at 1120px 30px, #ddd, transparent),
+    radial-gradient(2px 2px at 1160px 70px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 1210px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 1250px 80px, rgba(255,255,255,0.6), transparent),
+    radial-gradient(2px 2px at 1280px 30px, #ddd, transparent),
+    radial-gradient(2px 2px at 1320px 70px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 1370px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 1410px 80px, rgba(255,255,255,0.6), transparent),
+    radial-gradient(2px 2px at 1440px 30px, #ddd, transparent),
+    radial-gradient(2px 2px at 1480px 70px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 1530px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 1570px 80px, rgba(255,255,255,0.6), transparent),
+    radial-gradient(2px 2px at 1600px 30px, #ddd, transparent),
+    radial-gradient(2px 2px at 1640px 70px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 1690px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 1730px 80px, rgba(255,255,255,0.6), transparent),
+    radial-gradient(2px 2px at 1760px 30px, #ddd, transparent),
+    radial-gradient(2px 2px at 1800px 70px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 1850px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 1890px 80px, rgba(255,255,255,0.6), transparent),
+    radial-gradient(2px 2px at 1920px 30px, #ddd, transparent),
+    radial-gradient(2px 2px at 1960px 70px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 2010px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 2050px 80px, rgba(255,255,255,0.6), transparent);
+  background-repeat: repeat;
+  background-size: 200px 100px;
+  animation: twinkle 20s linear infinite;
+  z-index: 1;
+}
+
+.space-background::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(1px 1px at 50px 50px, #fff, transparent),
+    radial-gradient(1px 1px at 150px 150px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 250px 50px, #fff, transparent),
+    radial-gradient(1px 1px at 350px 150px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 450px 50px, #fff, transparent),
+    radial-gradient(1px 1px at 550px 150px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 650px 50px, #fff, transparent),
+    radial-gradient(1px 1px at 750px 150px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 850px 50px, #fff, transparent),
+    radial-gradient(1px 1px at 950px 150px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 1050px 50px, #fff, transparent),
+    radial-gradient(1px 1px at 1150px 150px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 1250px 50px, #fff, transparent),
+    radial-gradient(1px 1px at 1350px 150px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 1450px 50px, #fff, transparent),
+    radial-gradient(1px 1px at 1550px 150px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 1650px 50px, #fff, transparent),
+    radial-gradient(1px 1px at 1750px 150px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 1850px 50px, #fff, transparent),
+    radial-gradient(1px 1px at 1950px 150px, rgba(255,255,255,0.8), transparent);
+  background-repeat: repeat;
+  background-size: 100px 100px;
+  animation: twinkle 15s linear infinite reverse;
+  z-index: 2;
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Base styles with modern font */
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+  }
+
+  #__next {
+    height: 100%;
+  }
+}
+
+/* Component styles */
+@layer components {
+  /* Glass morphism effects */
+  .glass {
+    background-color: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  .glass-dark {
+    background-color: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Modern button styles */
+  .btn-modern {
+    padding: 0.75rem 1.5rem;
+    border-radius: 9999px;
+    font-weight: 500;
+    transition: all 0.3s;
+    background: linear-gradient(to right, #3b82f6, #8b5cf6);
+    color: white;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  }
+
+  .btn-modern:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+  }
+
+  /* Modern card styles */
+  .card-modern {
+    border-radius: 1rem;
+    padding: 1.5rem;
+    background-color: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Floating action button */
+  .fab-modern {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 4rem;
+    height: 4rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(to right, #fbbf24, #f59e0b);
+    color: #111827;
+    box-shadow: 0 8px 32px rgba(255, 215, 0, 0.4);
+    transition: all 0.3s ease;
+  }
+
+  .fab-modern:hover {
+    transform: scale(1.1);
+    box-shadow: 0 12px 40px rgba(255, 215, 0, 0.6);
+  }
+
+  /* Gradient backgrounds */
+  .gradient-primary {
+    background: linear-gradient(to right, #3b82f6, #8b5cf6);
+  }
+
+  .gradient-secondary {
+    background: linear-gradient(to right, #f472b6, #ef4444);
+  }
+
+  .gradient-gold {
+    background: linear-gradient(to right, #fbbf24, #f59e0b);
+  }
+
+  .gradient-dark {
+    background: linear-gradient(to bottom right, #111827, #1e3a8a, #7c3aed);
+  }
+}
+
+/* Utility styles */
+@layer utilities {
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(to bottom, #3b82f6, #8b5cf6);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(to bottom, #8b5cf6, #3b82f6);
+  }
+}
