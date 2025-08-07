@@ -42,17 +42,37 @@ export function useMap() {
   const addPostsToMap = useCallback((mapInstance: mapboxgl.Map) => {
     postsRef.current.forEach((post) => {
       if (post.lat && post.lng) {
-        // Create marker element
+        // Create marker element with Kleo theme
         const markerEl = document.createElement('div');
-        markerEl.className = 'w-6 h-6 bg-red-500 rounded-full border-2 border-white shadow-lg cursor-pointer';
+        markerEl.className = 'w-6 h-6 bg-gradient-to-br from-gold to-yellow-400 rounded-full border-2 border-white shadow-lg cursor-pointer';
         markerEl.style.transform = 'translate(-50%, -100%)';
 
-        // Create popup
+        // Create popup with enhanced content
         const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
-          <div class="p-3 max-w-xs">
-            <p class="text-sm text-gray-600 mb-2">${new Date(post.created_at || '').toLocaleDateString()}</p>
-            <p class="text-gray-900">${post.text}</p>
-            ${post.media_url ? `<audio controls class="mt-3 w-full"><source src="${post.media_url}" type="audio/mpeg"></audio>` : ''}
+          <div class="p-4 max-w-xs">
+            <div class="flex items-center space-x-2 mb-2">
+              <div class="w-6 h-6 bg-gradient-to-br from-gold to-yellow-400 rounded-full flex items-center justify-center">
+                <span class="text-gray-900 font-bold text-xs">K</span>
+              </div>
+              <div>
+                <p class="text-sm font-medium text-gray-900">${post.user?.email || 'Anonymous'}</p>
+                <p class="text-xs text-gray-500">${new Date(post.created_at || '').toLocaleDateString()}</p>
+              </div>
+            </div>
+            <p class="text-gray-900 mb-3">${post.content}</p>
+            ${post.media_url ? `
+              <div class="mt-3">
+                ${post.type === 'audio' ? 
+                  `<audio controls class="w-full"><source src="${post.media_url}" type="audio/mpeg"></audio>` :
+                  post.type === 'video' ?
+                  `<video controls class="w-full"><source src="${post.media_url}" type="video/mp4"></video>` :
+                  ''
+                }
+              </div>
+            ` : ''}
+            <div class="mt-2 text-xs text-gray-500">
+              <span class="bg-gray-100 px-2 py-1 rounded">${post.type}</span>
+            </div>
           </div>
         `);
 
@@ -68,14 +88,34 @@ export function useMap() {
   const addNewPostToMap = useCallback((newPost: Post, mapInstance: mapboxgl.Map) => {
     if (newPost.lat && newPost.lng) {
       const markerEl = document.createElement('div');
-      markerEl.className = 'w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow-lg cursor-pointer';
+      markerEl.className = 'w-6 h-6 bg-gradient-to-br from-gold to-yellow-400 rounded-full border-2 border-white shadow-lg cursor-pointer animate-pulse';
       markerEl.style.transform = 'translate(-50%, -100%)';
 
       const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
-        <div class="p-3 max-w-xs">
-          <p class="text-sm text-gray-600 mb-2">${new Date(newPost.created_at || '').toLocaleDateString()}</p>
-          <p class="text-gray-900">${newPost.text}</p>
-          ${newPost.media_url ? `<audio controls class="mt-3 w-full"><source src="${newPost.media_url}" type="audio/mpeg"></audio>` : ''}
+        <div class="p-4 max-w-xs">
+          <div class="flex items-center space-x-2 mb-2">
+            <div class="w-6 h-6 bg-gradient-to-br from-gold to-yellow-400 rounded-full flex items-center justify-center">
+              <span class="text-gray-900 font-bold text-xs">K</span>
+            </div>
+            <div>
+              <p class="text-sm font-medium text-gray-900">${newPost.user?.email || 'Anonymous'}</p>
+              <p class="text-xs text-gray-500">${new Date(newPost.created_at || '').toLocaleDateString()}</p>
+            </div>
+          </div>
+          <p class="text-gray-900 mb-3">${newPost.content}</p>
+          ${newPost.media_url ? `
+            <div class="mt-3">
+              ${newPost.type === 'audio' ? 
+                `<audio controls class="w-full"><source src="${newPost.media_url}" type="audio/mpeg"></audio>` :
+                newPost.type === 'video' ?
+                `<video controls class="w-full"><source src="${newPost.media_url}" type="video/mp4"></video>` :
+                ''
+              }
+            </div>
+          ` : ''}
+          <div class="mt-2 text-xs text-gray-500">
+            <span class="bg-gray-100 px-2 py-1 rounded">${newPost.type}</span>
+          </div>
         </div>
       `);
 

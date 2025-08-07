@@ -9,12 +9,13 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.53.0",
     "lucide-react": "^0.536.0",
     "mapbox-gl": "^3.14.0",
     "next": "15.4.5",
+    "nft.storage": "^7.2.0",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "xrpl": "^4.4.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

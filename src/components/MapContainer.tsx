@@ -51,9 +51,68 @@ export default function MapContainer({ onMapClick, onMapReady }: MapContainerPro
       projection: 'globe', // Enable 3D globe
       maxZoom: 22,
       minZoom: 1,
+      pitch: 0,
+      bearing: 0,
+      antialias: true,
     });
 
-    map.current.on('load', handleMapReady);
+    map.current.on('load', () => {
+      console.log('Map loaded, adding terrain and buildings...');
+      
+      // Add terrain source
+      map.current!.addSource('mapbox-terrain', {
+        'type': 'vector',
+        'url': 'mapbox://mapbox.mapbox-terrain-v2'
+      });
+
+      // Add terrain layer
+      map.current!.addLayer({
+        'id': 'terrain',
+        'type': 'hillshade',
+        'source': 'mapbox-terrain',
+        'source-layer': 'terrain',
+        'paint': {
+          'hillshade-shadow-color': '#000000',
+          'hillshade-highlight-color': '#FFFFFF',
+          'hillshade-accent-color': '#000000'
+        }
+      });
+
+      // Add building layer for 3D buildings
+      map.current!.addLayer({
+        'id': '3d-buildings',
+        'source': 'composite',
+        'source-layer': 'building',
+        'filter': ['==', 'extrude', 'true'],
+        'type': 'fill-extrusion',
+        'minzoom': 15,
+        'paint': {
+          'fill-extrusion-color': '#aaa',
+          'fill-extrusion-height': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            15,
+            0,
+            15.05,
+            ['get', 'height']
+          ],
+          'fill-extrusion-base': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            15,
+            0,
+            15.05,
+            ['get', 'min_height']
+          ],
+          'fill-extrusion-opacity': 0.6
+        }
+      });
+
+      handleMapReady();
+    });
+
     map.current.on('click', handleMapClick);
 
     isInitialized.current = true;
