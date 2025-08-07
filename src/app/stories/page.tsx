@@ -57,8 +57,29 @@ export default function StoriesPage() {
 
   const loadPosts = async () => {
     try {
-      const fetchedPosts = await getPosts();
-      setPosts(fetchedPosts);
+      const fetchedKleoPosts = await getPosts();
+      // Convert KleoPost[] to Post[]
+      const convertedPosts: Post[] = fetchedKleoPosts.map(kleoPost => ({
+        id: kleoPost.id,
+        user_id: kleoPost.contributor_id || 'anonymous',
+        type: kleoPost.media_type || 'text',
+        content: kleoPost.text,
+        lat: kleoPost.lat,
+        lng: kleoPost.lng,
+        media_url: kleoPost.ipfs_url,
+        ipfs_post_url: kleoPost.ipfs_url,
+        far_score: 0,
+        engagement_score: 0,
+        flags: 0,
+        created_at: kleoPost.created_at,
+        updated_at: kleoPost.created_at,
+        tags: kleoPost.tags,
+        contributor_id: kleoPost.contributor_id,
+        wallet_type: kleoPost.wallet_type,
+        reward_points: kleoPost.reward_points,
+        post_cid: kleoPost.post_cid
+      }));
+      setPosts(convertedPosts);
     } catch (error) {
       console.error('Error loading posts:', error);
     } finally {

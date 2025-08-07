@@ -294,49 +294,48 @@ export class IPFSStorage {
       flags: 0,
       created_at: nowISO,
       updated_at: nowISO,
-      user: user
+      user: user,
+      tags: postData.tags || [],
+      contributor_id: postData.contributor_id,
+      wallet_type: postData.wallet_type,
+      reward_points: postData.reward_points,
+      post_cid: postData.post_cid
     };
 
     // Store post in global state
     globalState.posts[postId] = post;
     globalState.total_posts++;
-    postCache.set(postId, post);
+    await this.saveGlobalState();
 
-    // Try to upload post to IPFS if available
-    if (client) {
-      try {
-        const postBlob = new Blob([JSON.stringify(post)], { type: 'application/json' });
-        const postFile = new File([postBlob], `post-${postId}.json`, { type: 'application/json' });
-        const postCid = await client.storeBlob(postFile);
-        const postUrl = `ipfs://${postCid}`;
-
-        post.ipfs_post_url = postUrl;
-        globalState.posts[postId] = postUrl;
-        
-        await this.saveGlobalState();
-      } catch (error) {
-        console.error('Failed to upload post to IPFS:', error);
-        post.ipfs_post_url = `local://post-${postId}.json`;
-      }
-    } else {
-      post.ipfs_post_url = `local://post-${postId}.json`;
-    }
+    // Update user's contribution points
+    const pointsEarned = this.calculatePointsEarned(postData.type, user.far_score);
+    user.contribution_points += pointsEarned;
+    await this.updateUser(user.id, { contribution_points: user.contribution_points });
 
     // Update rate limit
     rateLimitMap.set(user.id, now);
 
-    // Calculate and award points
-    const pointsEarned = this.calculatePointsEarned(postData.type, user.far_score);
-    user.contribution_points += pointsEarned;
-    user.far_score += Math.floor(pointsEarned / 10);
-
-    // Update user
-    await this.updateUser(user.id, {
-      contribution_points: user.contribution_points,
-      far_score: user.far_score
-    });
+    // Cache the post
+    postCache.set(postId, post);
 
     return post;
+  }
+
+  // Upload a single file to IPFS
+  async uploadFile(file: File): Promise<string> {
+    if (!client) {
+      throw new Error('IPFS client not initialized');
+    }
+
+    try {
+      const fileBlob = new Blob([file], { type: file.type });
+      const ipfsFile = new File([fileBlob], file.name, { type: file.type });
+      const cid = await client.storeBlob(ipfsFile);
+      return cid;
+    } catch (error) {
+      console.error('Failed to upload file to IPFS:', error);
+      throw error;
+    }
   }
 
   async getPosts(): Promise<Post[]> {

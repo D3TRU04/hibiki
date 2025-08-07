@@ -2,14 +2,21 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { User } from 'lucide-react';
+import { User, List, Wallet } from 'lucide-react';
 
 interface GlassyNavbarProps {
   onAddStory?: () => void;
   onAuthClick?: () => void;
+  onToggleFeed?: () => void;
+  onToggleUserPanel?: () => void;
 }
 
-export default function GlassyNavbar({ onAddStory, onAuthClick }: GlassyNavbarProps) {
+export default function GlassyNavbar({ 
+  onAddStory, 
+  onAuthClick, 
+  onToggleFeed, 
+  onToggleUserPanel 
+}: GlassyNavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
@@ -51,6 +58,22 @@ export default function GlassyNavbar({ onAddStory, onAuthClick }: GlassyNavbarPr
 
         {/* CTA Buttons */}
         <div className="flex items-center space-x-4">
+          <button
+            onClick={onToggleUserPanel}
+            className="hidden md:flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 rounded-lg text-white font-medium transition-all duration-200 hover:scale-105"
+          >
+            <Wallet size={16} />
+            <span>Profile</span>
+          </button>
+          
+          <button
+            onClick={onToggleFeed}
+            className="hidden md:flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 rounded-lg text-white font-medium transition-all duration-200 hover:scale-105"
+          >
+            <List size={16} />
+            <span>Feed</span>
+          </button>
+          
           <button
             onClick={onAuthClick}
             className="hidden md:flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 rounded-lg text-white font-medium transition-all duration-200 hover:scale-105"
@@ -107,6 +130,26 @@ export default function GlassyNavbar({ onAddStory, onAuthClick }: GlassyNavbarPr
             >
               About
             </Link>
+            <button
+              onClick={() => {
+                onToggleUserPanel?.();
+                setIsMenuOpen(false);
+              }}
+              className="w-full px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 rounded-lg text-white font-medium transition-all duration-200 flex items-center justify-center space-x-2"
+            >
+              <Wallet size={16} />
+              <span>Profile</span>
+            </button>
+            <button
+              onClick={() => {
+                onToggleFeed?.();
+                setIsMenuOpen(false);
+              }}
+              className="w-full px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 rounded-lg text-white font-medium transition-all duration-200 flex items-center justify-center space-x-2"
+            >
+              <List size={16} />
+              <span>Feed</span>
+            </button>
             <button
               onClick={() => {
                 onAuthClick?.();

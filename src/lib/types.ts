@@ -10,10 +10,36 @@ export interface User {
   ipfs_profile_url?: string;
 }
 
+// Wallet interface for Sprint 3
+export interface Wallet {
+  address: string;
+  type: "EVM" | "XRPL";
+  ensName?: string;
+  isConnected: boolean;
+  connect: () => void;
+  disconnect: () => void;
+}
+
+// New KleoPost interface for Sprint 2
+export interface KleoPost {
+  id: string;
+  text: string;
+  lat: number;
+  lng: number;
+  ipfs_url?: string;
+  media_type?: "audio" | "image" | "video";
+  tags?: string[];
+  created_at: string;
+  contributor_id?: string;
+  wallet_type?: "EVM" | "XRPL"; // Added for Sprint 3
+  reward_points?: number; // Added for Sprint 3
+  post_cid?: string; // Added for Sprint 3 - IPFS metadata CID
+}
+
 export interface Post {
   id?: string;
   user_id: string;
-  type: 'text' | 'audio' | 'video';
+  type: 'text' | 'audio' | 'video' | 'image';
   content: string;
   lat: number;
   lng: number;
@@ -26,22 +52,35 @@ export interface Post {
   created_at?: string;
   updated_at?: string;
   user?: User;
+  tags?: string[]; // Added for Sprint 2
+  contributor_id?: string; // Added for Sprint 2
+  wallet_type?: "EVM" | "XRPL"; // Added for Sprint 3
+  reward_points?: number; // Added for Sprint 3
+  post_cid?: string; // Added for Sprint 3
 }
 
 export interface CreatePostData {
-  type: 'text' | 'audio' | 'video';
+  type: 'text' | 'audio' | 'video' | 'image';
   content: string;
   lat: number;
   lng: number;
   mediaFile?: File;
   honeypot?: string;
+  tags?: string[]; // Added for Sprint 2
+  contributor_id?: string; // Added for Sprint 2
+  wallet_type?: "EVM" | "XRPL"; // Added for Sprint 3
+  reward_points?: number; // Added for Sprint 3
+  post_cid?: string; // Added for Sprint 3
 }
 
 export interface UploadFormData {
   text: string;
   audioFile?: File;
   videoFile?: File;
+  imageFile?: File; // Added for Sprint 2
   honeypot?: string;
+  tags?: string[]; // Added for Sprint 2
+  contributor_id?: string; // Added for Sprint 2
 }
 
 export interface MapPin {
@@ -59,7 +98,7 @@ export interface IPFSMetadata {
   timestamp: string;
   user_id: string;
   media_url?: string;
-  type: 'text' | 'audio' | 'video';
+  type: 'text' | 'audio' | 'video' | 'image';
   far_score: number;
   engagement_score: number;
 }

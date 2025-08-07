@@ -30,8 +30,26 @@ export function useMap() {
 
   const loadPosts = useCallback(async () => {
     try {
-      const fetchedPosts = await getPosts();
-      setPosts(fetchedPosts);
+      // Get KleoPosts and convert them to Posts for compatibility
+      const kleoPosts = await getPosts();
+      const convertedPosts: Post[] = kleoPosts.map(kleoPost => ({
+        id: kleoPost.id,
+        user_id: kleoPost.contributor_id || 'anonymous',
+        type: kleoPost.media_type || 'text',
+        content: kleoPost.text,
+        lat: kleoPost.lat,
+        lng: kleoPost.lng,
+        media_url: kleoPost.ipfs_url,
+        ipfs_post_url: kleoPost.ipfs_url,
+        far_score: 0,
+        engagement_score: 0,
+        flags: 0,
+        created_at: kleoPost.created_at,
+        updated_at: kleoPost.created_at,
+        tags: kleoPost.tags,
+        contributor_id: kleoPost.contributor_id
+      }));
+      setPosts(convertedPosts);
     } catch (error) {
       console.error('Error loading posts:', error);
     } finally {
@@ -55,7 +73,7 @@ export function useMap() {
                 <span class="text-gray-900 font-bold text-xs">K</span>
               </div>
               <div>
-                <p class="text-sm font-medium text-gray-900">${post.user?.email || 'Anonymous'}</p>
+                <p class="text-sm font-medium text-gray-900">${post.contributor_id || 'Anonymous'}</p>
                 <p class="text-xs text-gray-500">${new Date(post.created_at || '').toLocaleDateString()}</p>
               </div>
             </div>
@@ -66,12 +84,19 @@ export function useMap() {
                   `<audio controls class="w-full"><source src="${post.media_url}" type="audio/mpeg"></audio>` :
                   post.type === 'video' ?
                   `<video controls class="w-full"><source src="${post.media_url}" type="video/mp4"></video>` :
+                  post.type === 'image' ?
+                  `<img src="${post.media_url}" alt="Story media" class="w-full rounded">` :
                   ''
                 }
               </div>
             ` : ''}
             <div class="mt-2 text-xs text-gray-500">
               <span class="bg-gray-100 px-2 py-1 rounded">${post.type}</span>
+              ${post.tags && post.tags.length > 0 ? `
+                <div class="mt-1">
+                  ${post.tags.map(tag => `<span class="bg-blue-100 text-blue-700 px-2 py-1 rounded mr-1">#${tag}</span>`).join('')}
+                </div>
+              ` : ''}
             </div>
           </div>
         `);
@@ -98,7 +123,7 @@ export function useMap() {
               <span class="text-gray-900 font-bold text-xs">K</span>
             </div>
             <div>
-              <p class="text-sm font-medium text-gray-900">${newPost.user?.email || 'Anonymous'}</p>
+              <p class="text-sm font-medium text-gray-900">${newPost.contributor_id || 'Anonymous'}</p>
               <p class="text-xs text-gray-500">${new Date(newPost.created_at || '').toLocaleDateString()}</p>
             </div>
           </div>
@@ -109,12 +134,19 @@ export function useMap() {
                 `<audio controls class="w-full"><source src="${newPost.media_url}" type="audio/mpeg"></audio>` :
                 newPost.type === 'video' ?
                 `<video controls class="w-full"><source src="${newPost.media_url}" type="video/mp4"></video>` :
+                newPost.type === 'image' ?
+                `<img src="${newPost.media_url}" alt="Story media" class="w-full rounded">` :
                 ''
               }
             </div>
           ` : ''}
           <div class="mt-2 text-xs text-gray-500">
             <span class="bg-gray-100 px-2 py-1 rounded">${newPost.type}</span>
+            ${newPost.tags && newPost.tags.length > 0 ? `
+              <div class="mt-1">
+                ${newPost.tags.map(tag => `<span class="bg-blue-100 text-blue-700 px-2 py-1 rounded mr-1">#${tag}</span>`).join('')}
+              </div>
+            ` : ''}
           </div>
         </div>
       `);
