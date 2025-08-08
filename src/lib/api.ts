@@ -1,8 +1,14 @@
 import { ipfsStorage } from './ipfs-storage';
 import { xrplWallet, distributeRewards } from './xrpl-wallet';
-import { Post, CreatePostData, User, RewardSystem, XRPLWallet, KleoPost, Wallet } from './types';
+import { Post, CreatePostData, User, RewardSystem, XRPLWallet, KleoPost, Wallet, PostSubmission } from './types';
 import { uploadPostMetadata } from './ipfsPostMetadata';
 import { calculateRewardPoints, addUserXP, recordPostProof } from './rewards';
+import { aiSummaryService } from './ai-summary';
+import { newsFetcherService } from './news-fetcher';
+import { rateLimiterService } from './rate-limiter';
+import { fakeNewsDetectorService, FakeNewsAnalysis } from './fake-news-detector';
+import { web3StorageService } from './web3-storage';
+import { xrplNFTService } from './xrpl-nft';
 
 // Local storage for user session
 const USER_SESSION_KEY = 'kleo_user_session';
@@ -80,101 +86,139 @@ export async function getPosts(filters?: { tag?: string; type?: string }): Promi
 }
 
 // Create a new KleoPost with wallet integration
-export async function createKleoPost(postData: {
-  text: string;
-  lat: number;
-  lng: number;
-  mediaFile?: File;
-  tags?: string[];
-  contributor_id?: string;
-  wallet?: Wallet;
-}): Promise<KleoPost | null> {
+export async function createKleoPost(postData: PostSubmission, wallet: Wallet): Promise<KleoPost> {
   try {
-    const contributorId = postData.contributor_id || generateContributorId();
-    
-    // Upload media file to IPFS if provided
-    let ipfsUrl: string | undefined;
-    let mediaType: "audio" | "image" | "video" | undefined;
-    
-    if (postData.mediaFile) {
-      ipfsUrl = await uploadToIPFS(postData.mediaFile);
+    // Rate limiting check
+    if (!rateLimiterService.canPost(wallet.address)) {
+      const timeRemaining = rateLimiterService.getFormattedTimeRemaining(wallet.address);
+      throw new Error(`Rate limit exceeded. Please wait ${timeRemaining} before posting again.`);
+    }
+
+    let kleoPost: KleoPost;
+    let enhancedMetadata: any;
+
+    if (postData.content_type === 'news') {
+      // Handle news article submission
+      const newsFetcher = NewsFetcherService.getInstance();
+      const article = await newsFetcher.fetchArticle(postData.news_url!);
       
-      // Determine media type
-      if (postData.mediaFile.type.startsWith('audio/')) {
-        mediaType = 'audio';
-      } else if (postData.mediaFile.type.startsWith('image/')) {
-        mediaType = 'image';
-      } else if (postData.mediaFile.type.startsWith('video/')) {
-        mediaType = 'video';
+      if (!article) {
+        throw new Error('Failed to fetch news article content');
       }
-    }
 
-    // Create the post using existing infrastructure
-    const createPostData: CreatePostData = {
-      type: mediaType || 'text',
-      content: postData.text,
-      lat: postData.lat,
-      lng: postData.lng,
-      mediaFile: postData.mediaFile,
-      tags: postData.tags || [],
-      contributor_id: contributorId
-    };
+      // Check credibility
+      const fakeNewsDetector = FakeNewsDetectorService.getInstance();
+      const credibility = await fakeNewsDetector.analyzeNewsArticle(postData.news_url!);
+      
+      if (!credibility.is_reliable) {
+        throw new Error(`Article appears to be unreliable. Credibility score: ${credibility.score}/100`);
+      }
 
-    // Try to get current user, if not available, create a temporary anonymous user
-    let user = await getCurrentUser();
-    if (!user) {
-      // Create a temporary anonymous user for the submission
-      user = await createUser({
-        id: contributorId,
-        email: undefined,
-        wallet_address: undefined,
-        xrpl_address: undefined,
+      // Get AI summary
+      const aiSummary = AISummaryService.getInstance();
+      const summary = await aiSummary.summarizeNewsArticle(article.content, postData.news_url!);
+
+      kleoPost = {
+        id: generateId(),
+        user_id: wallet.address,
+        type: 'news',
+        content: article.title,
+        lat: postData.lat,
+        lng: postData.lng,
+        source_url: postData.news_url,
+        ai_summary: summary.summary,
+        credibility_score: credibility.score,
+        is_reliable: credibility.is_reliable,
+        content_type: 'news',
         far_score: 0,
-        contribution_points: 0
-      });
-    }
+        engagement_score: 0,
+        flags: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        processing_info: 'AI verified news article'
+      };
 
-    const post = await ipfsStorage.createPost(createPostData, user);
-    
-    if (!post) {
-      throw new Error('Failed to create post');
-    }
+      enhancedMetadata = {
+        ...kleoPost,
+        summary_text: summary.summary,
+        keywords: summary.keywords,
+        source_url: postData.news_url,
+        article_title: article.title,
+        article_content: article.content,
+        credibility_analysis: credibility
+      };
+    } else {
+      // Handle video upload
+      if (!postData.media_file) {
+        throw new Error('Video file is required for media posts');
+      }
 
-    // Create KleoPost with wallet information
-    const kleoPost: KleoPost = {
-      id: post.id || crypto.randomUUID(),
-      text: post.content,
-      lat: post.lat,
-      lng: post.lng,
-      ipfs_url: ipfsUrl || post.ipfs_post_url,
-      media_type: mediaType,
-      tags: post.tags || [],
-      created_at: post.created_at || new Date().toISOString(),
-      contributor_id: contributorId,
-      wallet_type: postData.wallet?.type,
-      reward_points: 0 // Will be calculated below
-    };
+      // Validate video file
+      const validTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'];
+      if (!validTypes.includes(postData.media_file.type)) {
+        throw new Error('Invalid video format. Please upload MP4, WebM, OGG, or MOV files only.');
+      }
+
+      if (postData.media_file.size > 5 * 1024 * 1024) {
+        throw new Error('Video file size must be less than 5MB');
+      }
+
+      // Upload video to IPFS
+      const web3Storage = Web3StorageService.getInstance();
+      const videoCid = await web3Storage.uploadFile(postData.media_file);
+
+      kleoPost = {
+        id: generateId(),
+        user_id: wallet.address,
+        type: 'video',
+        content: postData.content,
+        lat: postData.lat,
+        lng: postData.lng,
+        media_url: `ipfs://${videoCid}`,
+        content_type: 'media',
+        file_size: postData.media_file.size,
+        far_score: 0,
+        engagement_score: 0,
+        flags: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        processing_info: 'Video uploaded to IPFS'
+      };
+
+      enhancedMetadata = {
+        ...kleoPost,
+        video_cid: videoCid,
+        video_type: postData.media_file.type,
+        video_size: postData.media_file.size
+      };
+    }
 
     // Calculate reward points
-    const rewardPoints = calculateRewardPoints(kleoPost);
-    kleoPost.reward_points = rewardPoints;
+    const rewardPoints = calculateRewardPoints(kleoPost, wallet);
+    kleoPost.far_score = rewardPoints;
 
-    // Upload metadata to IPFS
-    const postCid = await uploadPostMetadata(kleoPost);
-    kleoPost.post_cid = postCid;
+    // Upload enhanced metadata to IPFS
+    const web3Storage = Web3StorageService.getInstance();
+    const postCid = await web3Storage.uploadPost(kleoPost, enhancedMetadata);
 
-    // Add XP to user if wallet is connected
-    if (postData.wallet?.isConnected && postData.wallet.address) {
-      const userXP = addUserXP(postData.wallet.address, rewardPoints);
-      console.log(`User earned ${rewardPoints} XP! Total: ${userXP.totalXP}`);
-      
-      // Record post proof for future RLUSD claims
-      await recordPostProof(postCid, postData.wallet.address);
-    }
+    // Record post proof
+    recordPostProof(kleoPost.id, rewardPoints, wallet.address);
 
-    return kleoPost;
+    // Record the post
+    rateLimiterService.recordPost(wallet.address);
+
+    // Automatically mint NFT
+    const xrplNFTService = XRPLNFTService.getInstance();
+    await xrplNFTService.mintFromPostCID(postCid, wallet.address);
+
+    return {
+      ...kleoPost,
+      ipfs_metadata_url: `ipfs://${postCid}`,
+      post_cid: postCid
+    };
+
   } catch (error) {
-    console.error('Error creating KleoPost:', error);
+    console.error('Error creating Kleo post:', error);
     throw error;
   }
 }
@@ -344,4 +388,27 @@ export async function getFaucetFunds(address: string): Promise<boolean> {
 export async function uploadAudioFile(): Promise<string | null> {
   console.warn('uploadAudioFile is deprecated. Use createPost with IPFS instead.');
   return null;
+} 
+
+// Get XRPL wallet seed from wallet address
+async function getXRPLWalletSeed(walletAddress: string): Promise<string | null> {
+  try {
+    // Check if user has an XRPL wallet stored
+    if (typeof window !== 'undefined') {
+      const userWallets = JSON.parse(localStorage.getItem('kleo_user_wallets') || '{}');
+      const userWallet = userWallets[walletAddress];
+      
+      if (userWallet && userWallet.xrplSeed) {
+        return userWallet.xrplSeed;
+      }
+    }
+    
+    // For MVP, you can implement wallet generation or import here
+    // This is a placeholder - you'll need to integrate with your wallet system
+    console.log('⚠️ XRPL wallet seed not found for address:', walletAddress);
+    return null;
+  } catch (error) {
+    console.error('❌ Error getting XRPL wallet seed:', error);
+    return null;
+  }
 } 

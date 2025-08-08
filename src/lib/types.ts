@@ -23,17 +23,28 @@ export interface Wallet {
 // New KleoPost interface for Sprint 2
 export interface KleoPost {
   id: string;
-  text: string;
+  user_id: string;
+  type: 'text' | 'video' | 'news';
+  content: string;
   lat: number;
   lng: number;
-  ipfs_url?: string;
-  media_type?: "audio" | "image" | "video";
-  tags?: string[];
+  media_url?: string;
+  ipfs_metadata_url?: string;
+  ipfs_post_url?: string;
+  far_score: number;
+  engagement_score: number;
+  flags: number;
   created_at: string;
-  contributor_id?: string;
-  wallet_type?: "EVM" | "XRPL"; // Added for Sprint 3
-  reward_points?: number; // Added for Sprint 3
-  post_cid?: string; // Added for Sprint 3 - IPFS metadata CID
+  updated_at: string;
+  user?: User;
+  // AI and verification fields
+  ai_summary?: string;
+  source_url?: string;
+  content_type: 'media' | 'news';
+  file_size?: number;
+  credibility_score?: number;
+  is_reliable?: boolean;
+  processing_info?: string;
 }
 
 export interface Post {
@@ -60,17 +71,41 @@ export interface Post {
 }
 
 export interface CreatePostData {
-  type: 'text' | 'audio' | 'video' | 'image';
-  content: string;
+  text: string;
   lat: number;
   lng: number;
   mediaFile?: File;
-  honeypot?: string;
-  tags?: string[]; // Added for Sprint 2
-  contributor_id?: string; // Added for Sprint 2
-  wallet_type?: "EVM" | "XRPL"; // Added for Sprint 3
-  reward_points?: number; // Added for Sprint 3
-  post_cid?: string; // Added for Sprint 3
+  tags?: string[];
+  contributor_id?: string;
+  wallet?: Wallet;
+  // New fields
+  newsUrl?: string;
+  content_type: 'media' | 'news';
+}
+
+export interface PostSubmission {
+  type: 'text' | 'video' | 'news';
+  content: string;
+  lat: number;
+  lng: number;
+  media_file?: File;
+  news_url?: string;
+  ai_summary?: string;
+  source_url?: string;
+  credibility_score?: number;
+  is_reliable?: boolean;
+}
+
+export interface AISummary {
+  summary: string;
+  confidence: number;
+  keywords: string[];
+}
+
+export interface RateLimitInfo {
+  canPost: boolean;
+  timeRemaining: number;
+  lastPostTime?: number;
 }
 
 export interface UploadFormData {
@@ -147,4 +182,23 @@ export interface XRPLWallet {
   balance: number;
   connected: boolean;
   network: 'mainnet' | 'testnet' | 'devnet';
+} 
+
+export interface UserXP {
+  total_xp: number;
+  posts_created: number;
+  posts_liked: number;
+  posts_shared: number;
+  days_active: number;
+  last_activity: string;
+  xrpl_address?: string;
+  pending_rewards: number;
+}
+
+export interface PostProof {
+  post_id: string;
+  timestamp: string;
+  xp_earned: number;
+  wallet_address: string;
+  transaction_hash?: string;
 } 

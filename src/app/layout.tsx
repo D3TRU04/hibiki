@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { DynamicContextProvider, DynamicWagmiConnector, DYNAMIC_CONFIG } from "@/lib/dynamic-auth";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,7 +35,11 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <DynamicContextProvider {...DYNAMIC_CONFIG}>
+          <DynamicWagmiConnector>
+            {children}
+          </DynamicWagmiConnector>
+        </DynamicContextProvider>
       </body>
     </html>
   );

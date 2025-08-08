@@ -1,145 +1,120 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Trophy, Medal, Crown, Star, Users } from 'lucide-react';
-import { getLeaderboard, getLevelTitle } from '@/lib/rewards';
-
-interface LeaderboardEntry {
-  address: string;
-  totalXP: number;
-  level: number;
-  posts: number;
-}
+import Link from 'next/link';
+import { Trophy, Star, User, TrendingUp } from 'lucide-react';
+import { graphClient, GraphQLUser } from '@/lib/graph-client';
 
 export default function Leaderboard() {
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [users, setUsers] = useState<GraphQLUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadLeaderboard = () => {
-      const data = getLeaderboard();
-      setLeaderboard(data);
-      setIsLoading(false);
+    const loadLeaderboard = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const leaderboard = await graphClient.getLeaderboard(10);
+        setUsers(leaderboard);
+      } catch (err) {
+        console.error('Error loading leaderboard:', err);
+        setError('Failed to load leaderboard');
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     loadLeaderboard();
-    // Refresh leaderboard every 30 seconds
-    const interval = setInterval(loadLeaderboard, 30000);
-    return () => clearInterval(interval);
   }, []);
 
-  const getRankIcon = (index: number) => {
-    switch (index) {
-      case 0:
-        return <Crown className="w-4 h-4 text-yellow-500" />;
-      case 1:
-        return <Medal className="w-4 h-4 text-gray-400" />;
-      case 2:
-        return <Medal className="w-4 h-4 text-amber-600" />;
-      default:
-        return <Trophy className="w-4 h-4 text-gray-300" />;
-    }
-  };
-
-  const getRankColor = (index: number) => {
-    switch (index) {
-      case 0:
-        return 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-white';
-      case 1:
-        return 'bg-gradient-to-r from-gray-300 to-gray-400 text-white';
-      case 2:
-        return 'bg-gradient-to-r from-amber-500 to-amber-600 text-white';
-      default:
-        return 'bg-white hover:bg-gray-50';
-    }
+  const formatDate = (timestamp: string) => {
+    return new Date(parseInt(timestamp) * 1000).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric'
+    });
   };
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-lg shadow-lg p-4">
-        <div className="flex items-center justify-center h-32">
-          <div className="text-center space-y-2">
-            <div className="w-6 h-6 border-2 border-gold border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p className="text-sm text-gray-500">Loading leaderboard...</p>
-          </div>
+      <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 border border-white/20">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gold mx-auto mb-2"></div>
+          <p className="text-gray-300 text-sm">Loading leaderboard...</p>
         </div>
       </div>
     );
   }
 
-  if (leaderboard.length === 0) {
+  if (error) {
     return (
-      <div className="bg-white rounded-lg shadow-lg p-4">
+      <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 border border-white/20">
         <div className="text-center">
-          <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Users className="w-6 h-6 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Contributors Yet</h3>
-          <p className="text-sm text-gray-600">
-            Be the first to share a story and earn Cookie Points!
-          </p>
+          <p className="text-red-400 text-sm">{error}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-4">
-      {/* Header */}
+    <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 border border-white/20">
       <div className="flex items-center space-x-2 mb-4">
         <Trophy className="w-5 h-5 text-gold" />
-        <h3 className="text-lg font-semibold text-gray-900">Top Contributors</h3>
+        <h3 className="text-lg font-semibold text-white">Leaderboard</h3>
+        <TrendingUp className="w-4 h-4 text-gray-400" />
       </div>
 
-      {/* Leaderboard */}
-      <div className="space-y-2">
-        {leaderboard.map((entry, index) => (
-          <div
-            key={entry.address}
-            className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${getRankColor(index)}`}
-          >
-            {/* Rank */}
-            <div className="flex items-center space-x-2 min-w-0 flex-1">
-              <div className="flex items-center space-x-1">
-                {getRankIcon(index)}
-                <span className="text-sm font-medium">
-                  #{index + 1}
-                </span>
-              </div>
-              
-              {/* User Info */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">
-                  {entry.address ? `${entry.address.slice(0, 6)}...${entry.address.slice(-4)}` : 'Anonymous'}
-                </p>
-                <div className="flex items-center space-x-2 text-xs opacity-75">
-                  <span>Level {entry.level} {getLevelTitle(entry.level)}</span>
-                  <span>•</span>
-                  <span>{entry.posts} posts</span>
+      {users.length > 0 ? (
+        <div className="space-y-3">
+          {users.map((user, index) => (
+            <Link
+              key={user.id}
+              href={`/profile/${user.wallet}`}
+              className="block bg-white/5 rounded-lg p-3 border border-white/10 hover:border-gold/30 transition-all duration-300"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-gold to-yellow-400 text-gray-900 font-bold text-sm">
+                    {index + 1}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <User className="w-4 h-4 text-gray-400" />
+                    <span className="text-white font-medium text-sm">
+                      {user.wallet.slice(0, 6)}...{user.wallet.slice(-4)}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex items-center space-x-4 text-sm">
+                  <div className="flex items-center space-x-1 text-gold">
+                    <Star className="w-4 h-4" />
+                    <span className="font-medium">{user.total_xp}</span>
+                  </div>
+                  <div className="text-gray-400">
+                    {user.total_posts} posts
+                  </div>
                 </div>
               </div>
-            </div>
-
-            {/* XP */}
-            <div className="text-right">
-              <div className="flex items-center space-x-1">
-                <Star className="w-3 h-3" />
-                <span className="text-sm font-bold">
-                  {entry.totalXP}
-                </span>
+              
+              <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
+                <span>Last active: {formatDate(user.last_activity)}</span>
+                <span>{user.total_nfts} NFTs</span>
               </div>
-              <p className="text-xs opacity-75">XP</p>
-            </div>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-6">
+          <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Trophy className="w-6 h-6 text-gray-400" />
           </div>
-        ))}
-      </div>
-
-      {/* Footer */}
-      <div className="mt-4 pt-3 border-t border-gray-200">
-        <p className="text-xs text-gray-500 text-center">
-          Leaderboard updates every 30 seconds
-        </p>
-      </div>
+          <h3 className="text-sm font-medium text-white mb-1">No data yet</h3>
+          <p className="text-gray-400 text-xs">
+            Start sharing stories to appear on the leaderboard!
+          </p>
+        </div>
+      )}
     </div>
   );
 } 

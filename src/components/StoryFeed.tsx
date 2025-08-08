@@ -1,274 +1,149 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Clock, Tag, Image, Video, Music, Filter } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Filter, Search, Video, Link, MessageSquare } from 'lucide-react';
 import { KleoPost } from '@/lib/types';
-import { getPosts } from '@/lib/api';
+import StoryCard from './StoryCard';
 
 interface StoryFeedProps {
-  onPostClick: (post: KleoPost) => void;
-  selectedTag?: string;
-  selectedType?: string;
-  onFilterChange: (filters: { tag?: string; type?: string }) => void;
+  posts: KleoPost[];
+  onPostClick?: (post: KleoPost) => void;
 }
 
-interface FilterState {
-  tag?: string;
-  type?: string;
-}
+type FilterType = 'all' | 'video' | 'news' | 'text';
 
-export default function StoryFeed({
-  onPostClick,
-  selectedTag,
-  selectedType,
-  onFilterChange
-}: StoryFeedProps) {
-  const [posts, setPosts] = useState<KleoPost[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default function StoryFeed({ posts, onPostClick }: StoryFeedProps) {
+  const [filteredPosts, setFilteredPosts] = useState<KleoPost[]>(posts);
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState<FilterState>({
-    tag: selectedTag,
-    type: selectedType
-  });
-
-  // Load posts
-  const loadPosts = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const fetchedPosts = await getPosts(filters);
-      setPosts(fetchedPosts);
-    } catch (err) {
-      setError('Failed to load stories. Please try again.');
-      console.error('Error loading posts:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [filters]);
 
   useEffect(() => {
-    loadPosts();
-  }, [loadPosts]);
+    let filtered = posts;
 
-  const handleFilterChange = (newFilters: FilterState) => {
-    setFilters(newFilters);
-    onFilterChange(newFilters);
-  };
+    // Apply media type filter
+    if (activeFilter !== 'all') {
+      filtered = filtered.filter(post => post.type === activeFilter);
+    }
 
-  const clearFilters = () => {
-    const clearedFilters = { tag: undefined, type: undefined };
-    setFilters(clearedFilters);
-    onFilterChange(clearedFilters);
-  };
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(post => 
+        post.content.toLowerCase().includes(term) ||
+        (post.ai_summary && post.ai_summary.toLowerCase().includes(term)) ||
+        (post.contributor_id && post.contributor_id.toLowerCase().includes(term))
+      );
+    }
 
-  const formatTimeAgo = (dateString: string): string => {
-    const now = new Date();
-    const postDate = new Date(dateString);
-    const diffInSeconds = Math.floor((now.getTime() - postDate.getTime()) / 1000);
+    setFilteredPosts(filtered);
+  }, [posts, activeFilter, searchTerm]);
 
-    if (diffInSeconds < 60) return 'just now';
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-    if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)}d ago`;
-    return `${Math.floor(diffInSeconds / 2592000)}mo ago`;
-  };
-
-  const truncateText = (text: string, maxLength: number = 150): string => {
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + '...';
-  };
-
-  const getMediaTypeIcon = (mediaType?: string) => {
-    switch (mediaType) {
-      case 'image':
-        return <Image className="w-4 h-4 text-blue-500" />;
+  const getFilterIcon = (filter: FilterType) => {
+    switch (filter) {
       case 'video':
-        return <Video className="w-4 h-4 text-red-500" />;
-      case 'audio':
-        return <Music className="w-4 h-4 text-green-500" />;
+        return <Video className="w-4 h-4" />;
+      case 'news':
+        return <Link className="w-4 h-4" />;
+      case 'text':
+        return <MessageSquare className="w-4 h-4" />;
       default:
         return null;
     }
   };
 
-  const getMediaTypeLabel = (mediaType?: string): string => {
-    switch (mediaType) {
-      case 'image':
-        return 'Photo';
+  const getFilterLabel = (filter: FilterType) => {
+    switch (filter) {
       case 'video':
-        return 'Video';
-      case 'audio':
-        return 'Audio';
-      default:
+        return 'Videos';
+      case 'news':
+        return 'News';
+      case 'text':
         return 'Text';
+      default:
+        return 'All';
     }
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg h-full flex flex-col">
+    <div className="bg-white rounded-lg shadow-lg p-6">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Recent Stories</h2>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center space-x-1 px-3 py-1 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-          >
-            <Filter className="w-4 h-4" />
-            <span>Filter</span>
-          </button>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Global Feed</h2>
+          <p className="text-gray-600 text-sm">
+            {filteredPosts.length} of {posts.length} stories
+          </p>
         </div>
-
-        {/* Filter Panel */}
-        {showFilters && (
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-gray-700">Filters</h3>
-              <button
-                onClick={clearFilters}
-                className="text-xs text-gray-500 hover:text-gray-700"
-              >
-                Clear all
-              </button>
-            </div>
-
-            {/* Media Type Filter */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-2">
-                Media Type
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {['all', 'text', 'image', 'video', 'audio'].map(type => (
-                  <button
-                    key={type}
-                    onClick={() => handleFilterChange({ ...filters, type: type === 'all' ? undefined : type })}
-                    className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                      filters.type === type || (!filters.type && type === 'all')
-                        ? 'bg-gold text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                  >
-                    {type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Tag Filter */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-2">
-                Popular Tags
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {['conflict', 'dailyLife', 'music', 'food', 'travel', 'art'].map(tag => (
-                  <button
-                    key={tag}
-                    onClick={() => handleFilterChange({ ...filters, tag: filters.tag === tag ? undefined : tag })}
-                    className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                      filters.tag === tag
-                        ? 'bg-gold text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                  >
-                    #{tag}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className="flex items-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+        >
+          <Filter className="w-4 h-4" />
+          <span className="text-sm font-medium">Filters</span>
+        </button>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="text-center space-y-2">
-              <div className="w-6 h-6 border-2 border-gold border-t-transparent rounded-full animate-spin mx-auto"></div>
-              <p className="text-sm text-gray-500">Loading stories...</p>
-            </div>
+      {/* Search and Filters */}
+      {showFilters && (
+        <div className="mb-6 space-y-4">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search stories..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold focus:border-transparent"
+            />
           </div>
-        ) : error ? (
-          <div className="p-4 text-center">
-            <p className="text-red-600 text-sm">{error}</p>
-            <button
-              onClick={loadPosts}
-              className="mt-2 px-4 py-2 bg-gold text-white rounded-lg hover:bg-yellow-500 transition-colors text-sm"
-            >
-              Try Again
-            </button>
-          </div>
-        ) : posts.length === 0 ? (
-          <div className="p-4 text-center">
-            <p className="text-gray-500 text-sm">No stories found</p>
-            {filters.tag || filters.type ? (
+
+          {/* Filter Buttons */}
+          <div className="flex flex-wrap gap-2">
+            {(['all', 'video', 'news', 'text'] as FilterType[]).map(filter => (
               <button
-                onClick={clearFilters}
-                className="mt-2 text-gold hover:text-yellow-500 text-sm"
+                key={filter}
+                onClick={() => setActiveFilter(filter)}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  activeFilter === filter
+                    ? 'bg-gold text-gray-900'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
               >
-                Clear filters
+                {getFilterIcon(filter)}
+                <span>{getFilterLabel(filter)}</span>
               </button>
-            ) : null}
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-200">
-            {posts.map((post) => (
-              <div
-                key={post.id}
-                onClick={() => onPostClick(post)}
-                className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
-              >
-                <div className="flex items-start space-x-3">
-                  {/* Media Type Icon */}
-                  <div className="flex-shrink-0 mt-1">
-                    {getMediaTypeIcon(post.media_type)}
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <span className="text-xs text-gray-500">
-                        {getMediaTypeLabel(post.media_type)}
-                      </span>
-                      <span className="text-gray-300">•</span>
-                      <div className="flex items-center space-x-1 text-xs text-gray-500">
-                        <Clock className="w-3 h-3" />
-                        <span>{formatTimeAgo(post.created_at)}</span>
-                      </div>
-                    </div>
-
-                    <p className="text-sm text-gray-900 mb-2">
-                      {truncateText(post.text)}
-                    </p>
-
-                    {/* Tags */}
-                    {post.tags && post.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {post.tags.slice(0, 3).map(tag => (
-                          <span
-                            key={tag}
-                            className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs"
-                          >
-                            <Tag className="w-3 h-3 mr-1" />
-                            #{tag}
-                          </span>
-                        ))}
-                        {post.tags.length > 3 && (
-                          <span className="text-xs text-gray-500">
-                            +{post.tags.length - 3} more
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Posts Grid */}
+      {filteredPosts.length > 0 ? (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {filteredPosts.map(post => (
+            <StoryCard
+              key={post.id}
+              post={post}
+              onClick={onPostClick ? () => onPostClick(post) : undefined}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Search className="w-8 h-8 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No stories found</h3>
+          <p className="text-gray-600">
+            {searchTerm || activeFilter !== 'all' 
+              ? 'Try adjusting your search or filters'
+              : 'Be the first to share a story at this location!'
+            }
+          </p>
+        </div>
+      )}
     </div>
   );
 } 

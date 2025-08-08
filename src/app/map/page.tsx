@@ -1,15 +1,13 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { Post, KleoPost } from '@/lib/types';
+import { KleoPost, Post } from '@/lib/types';
 import { useMap } from '@/hooks/useMap';
+import { useDynamicWallet } from '@/hooks/useDynamicWallet';
 import GlassyNavbar from '@/components/GlassyNavbar';
 import MapContainer from '@/components/MapContainer';
-import SubmissionForm from '@/components/SubmissionForm';
-import StoryFeed from '@/components/StoryFeed';
-import UserPanel from '@/components/UserPanel';
-import Leaderboard from '@/components/Leaderboard';
-import AuthModal from '@/components/AuthModal';
+import MapSidebar from '@/components/MapSidebar';
+import MapModals from '@/components/MapModals';
 import LoadingPage from '@/components/LoadingPage';
 import mapboxgl from 'mapbox-gl';
 
@@ -20,12 +18,21 @@ export default function MapPage() {
   const [showLoading, setShowLoading] = useState(true);
   const [showStoryFeed, setShowStoryFeed] = useState(false);
   const [showUserPanel, setShowUserPanel] = useState(false);
-  const [selectedTag, setSelectedTag] = useState<string | undefined>();
-  const [selectedType, setSelectedType] = useState<string | undefined>();
+  const [selectedTag, setSelectedTag] = useState<string>('');
+  const [selectedType, setSelectedType] = useState<string>('');
+  const [showNFTNotification, setShowNFTNotification] = useState(false);
+  const [nftMintingData, setNftMintingData] = useState<{
+    tokenId?: string;
+    transactionHash?: string;
+    postCid?: string;
+  } | null>(null);
+  
+  const { wallet, isConnected } = useDynamicWallet();
   
   const {
     map,
     setMap,
+    posts,
     setPosts,
     isLoading,
     addNewPostToMap,
@@ -40,28 +47,35 @@ export default function MapPage() {
   }, []);
 
   const handleMapClick = useCallback((lat: number, lng: number) => {
+    if (!isConnected || !wallet) {
+      setShowAuthModal(true);
+      return;
+    }
+    
     setSelectedLocation({ lat, lng });
     setIsSubmissionFormOpen(true);
-  }, []);
+  }, [isConnected, wallet]);
 
   const handleMapReady = useCallback((mapInstance: mapboxgl.Map) => {
     setMap(mapInstance);
   }, [setMap]);
 
   const handleAddStory = useCallback(() => {
-    // Use current map center if available, otherwise use a default location
+    if (!isConnected || !wallet) {
+      setShowAuthModal(true);
+      return;
+    }
+
     if (map) {
       const center = map.getCenter();
       setSelectedLocation({ lat: center.lat, lng: center.lng });
     } else {
-      // Fallback to a reasonable default (world center)
       setSelectedLocation({ lat: 0, lng: 0 });
     }
     setIsSubmissionFormOpen(true);
-  }, [map]);
+  }, [map, isConnected, wallet]);
 
   const handlePostCreated = useCallback((newPost: KleoPost) => {
-    // Convert KleoPost to Post for compatibility with existing map functionality
     const post: Post = {
       id: newPost.id,
       user_id: newPost.contributor_id || 'anonymous',
@@ -87,11 +101,19 @@ export default function MapPage() {
     if (map) {
       addNewPostToMap(post, map);
     }
+
+    if (newPost.post_cid) {
+      setNftMintingData({
+        tokenId: newPost.post_cid,
+        postCid: newPost.post_cid,
+        transactionHash: 'NFT minted successfully'
+      });
+      setShowNFTNotification(true);
+    }
   }, [map, setPosts, addNewPostToMap]);
 
   const handlePostClick = useCallback((post: KleoPost) => {
     if (map) {
-      // Fly to the post location
       map.flyTo({
         center: [post.lng, post.lat],
         zoom: 15,
@@ -101,42 +123,25 @@ export default function MapPage() {
   }, [map]);
 
   const handleFilterChange = useCallback((filters: { tag?: string; type?: string }) => {
-    setSelectedTag(filters.tag);
-    setSelectedType(filters.type);
-    
-    // Filter map pins based on selected filters
-    if (map) {
-      // Get all markers on the map
-      const markers = document.querySelectorAll('.mapboxgl-marker');
-      
-      markers.forEach((marker) => {
-        const popup = marker.querySelector('.mapboxgl-popup');
-        if (popup) {
-          const content = popup.innerHTML;
-          let shouldShow = true;
-          
-          // Filter by media type
-          if (filters.type && filters.type !== 'all') {
-            const hasMediaType = content.includes(`bg-gray-100 px-2 py-1 rounded">${filters.type}`);
-            if (!hasMediaType) {
-              shouldShow = false;
-            }
-          }
-          
-          // Filter by tag
-          if (filters.tag && shouldShow) {
-            const hasTag = content.includes(`#${filters.tag}`);
-            if (!hasTag) {
-              shouldShow = false;
-            }
-          }
-          
-          // Show/hide marker
-          (marker as HTMLElement).style.display = shouldShow ? 'block' : 'none';
-        }
-      });
-    }
-  }, [map]);
+    setSelectedTag(filters.tag || '');
+    setSelectedType(filters.type || '');
+  }, []);
+
+  // Convert posts to the format expected by MapContainer
+  const mapPosts = posts.map(post => ({
+    id: post.id || '',
+    lat: post.lat,
+    lng: post.lng,
+    text: post.content,
+    media_type: post.type,
+    ipfs_url: post.media_url || post.ipfs_post_url,
+    ai_summary: (post as any).ai_summary,
+    source_url: (post as any).source_url,
+    tags: post.tags || [],
+    reward_points: post.reward_points || 0,
+    contributor_id: post.contributor_id,
+    created_at: post.created_at || new Date().toISOString()
+  }));
 
   if (showLoading) {
     return <LoadingPage />;
@@ -144,79 +149,51 @@ export default function MapPage() {
 
   return (
     <div className="h-screen w-screen relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      {/* Glassy Navbar */}
       <GlassyNavbar 
         onAddStory={handleAddStory} 
         onAuthClick={() => setShowAuthModal(true)}
         onToggleFeed={() => setShowStoryFeed(!showStoryFeed)}
         onToggleUserPanel={() => setShowUserPanel(!showUserPanel)}
+        isAuthenticated={isConnected}
       />
       
-      {/* Main Content */}
       <div className="pt-16 h-full relative z-10 flex">
-        {/* Map Container */}
         <div className={`relative transition-all duration-300 ${
           showStoryFeed || showUserPanel ? 'w-2/3' : 'w-full'
         }`}>
           <MapContainer
             onMapClick={handleMapClick}
             onMapReady={handleMapReady}
+            posts={mapPosts}
           />
         </div>
 
-        {/* Sidebar */}
-        {(showStoryFeed || showUserPanel) && (
-          <div className="w-1/3 h-full bg-white border-l border-gray-200 flex flex-col">
-            {/* User Panel */}
-            {showUserPanel && (
-              <div className="p-4 border-b border-gray-200">
-                <UserPanel />
-              </div>
-            )}
-
-            {/* Story Feed */}
-            {showStoryFeed && (
-              <div className="flex-1">
-                <StoryFeed
-                  onPostClick={handlePostClick}
-                  selectedTag={selectedTag}
-                  selectedType={selectedType}
-                  onFilterChange={handleFilterChange}
-                />
-              </div>
-            )}
-
-            {/* Leaderboard (if both panels are shown) */}
-            {showUserPanel && showStoryFeed && (
-              <div className="p-4 border-t border-gray-200">
-                <Leaderboard />
-              </div>
-            )}
-          </div>
-        )}
+        <MapSidebar
+          showStoryFeed={showStoryFeed}
+          showUserPanel={showUserPanel}
+          selectedTag={selectedTag}
+          selectedType={selectedType}
+          onPostClick={handlePostClick}
+          onFilterChange={handleFilterChange}
+        />
       </div>
 
-      {/* Submission Form Modal */}
-      {selectedLocation && (
-        <SubmissionForm
-          isOpen={isSubmissionFormOpen}
-          onClose={() => {
-            setIsSubmissionFormOpen(false);
-            setSelectedLocation(null);
-          }}
-          lat={selectedLocation.lat}
-          lng={selectedLocation.lng}
-          onPostCreated={handlePostCreated}
-        />
-      )}
-
-      {/* Auth Modal */}
-      <AuthModal 
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
+      <MapModals
+        isSubmissionFormOpen={isSubmissionFormOpen}
+        selectedLocation={selectedLocation}
+        showAuthModal={showAuthModal}
+        showNFTNotification={showNFTNotification}
+        nftMintingData={nftMintingData}
+        wallet={wallet}
+        onCloseSubmissionForm={() => {
+          setIsSubmissionFormOpen(false);
+          setSelectedLocation(null);
+        }}
+        onCloseAuthModal={() => setShowAuthModal(false)}
+        onCloseNFTNotification={() => setShowNFTNotification(false)}
+        onPostCreated={handlePostCreated}
       />
 
-      {/* Loading Overlay */}
       {isLoading && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="text-center space-y-4">

@@ -1,0 +1,23 @@
+type NFTMinted @entity {
+  id: ID!
+  owner: String!
+  token_id: BigInt!
+  ipfs_cid: String!
+  xrpl_address: String!
+  xrpl_rewards: BigInt!
+  transaction_hash: String!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+}
+
+type User @entity {
+  id: ID!
+  total_nfts: Int!
+  last_activity: BigInt!
+}
+
+type GlobalStats @entity {
+  id: ID!
+  total_nfts: Int!
+  last_updated: BigInt!
+} 

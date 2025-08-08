@@ -1,27 +1,30 @@
 # Kleo MVP - Censorship-Resistant Map App
 
-Kleo is a decentralized storytelling platform that allows users to share stories, memories, and experiences tied to specific locations on a 3D interactive globe. Built with Next.js, Mapbox, IPFS, and XRPL for true decentralization.
+Kleo is a decentralized storytelling platform that allows users to share stories, memories, and experiences tied to specific locations on a 3D interactive globe. Built with Next.js, Mapbox, IPFS, XRPL, and Ripple EVM for true decentralization.
 
 ## Features
 
 - 🌍 **3D Interactive Globe**: Full-screen Mapbox globe with terrain and buildings
-- 🔐 **Decentralized Auth**: IPFS-based user authentication with local storage
+- 🔐 **Dynamic.xyz Authentication**: Secure wallet login supporting EVM (MetaMask, WalletConnect) and XRPL wallets
 - 📍 **Location-Based Stories**: Click anywhere on the map to share stories
-- 🎵 **Media Support**: Upload audio or video files to IPFS
-- 🛡️ **Anti-Spam**: Rate limiting (10 minutes between posts) and honeypot protection
+- 🎵 **Media Support**: Upload video files to IPFS
+- 🛡️ **Anti-Spam**: Rate limiting (5 minutes between posts) and honeypot protection
 - 🏆 **Farcaster-Style Rewards**: Reputation scoring and contribution points system
 - 💰 **XRPL Integration**: Earn XRP rewards for contributions
 - 🎨 **Beautiful UI**: Clean white and gold theme with modern design
 - 📱 **Mobile Responsive**: Works seamlessly on all devices
+- 🚀 **Ripple EVM NFTs**: Mint NFTs on Ripple's EVM sidechain
+- 🕸️ **Graph Database**: Advanced analytics and relationship mapping
 
 ## Tech Stack
 
 - **Frontend**: Next.js 15, React 19, TypeScript
 - **Styling**: TailwindCSS 4
 - **Map**: Mapbox GL JS 3.14
-- **Storage**: IPFS via NFT.Storage (completely decentralized)
-- **Blockchain**: XRPL for rewards and wallet integration
-- **Authentication**: IPFS-based with local storage
+- **Storage**: IPFS via Web3.Storage (completely decentralized)
+- **Blockchain**: XRPL for rewards + Ripple EVM for NFTs
+- **Authentication**: Dynamic.xyz for secure wallet authentication
+- **AI**: OpenAI for news summarization and fake news detection
 
 ## Getting Started
 
@@ -31,6 +34,7 @@ Kleo is a decentralized storytelling platform that allows users to share stories
 - npm or yarn
 - Mapbox account
 - NFT.Storage account
+- Dynamic.xyz account (for authentication)
 
 ### Installation
 
@@ -49,6 +53,9 @@ Kleo is a decentralized storytelling platform that allows users to share stories
    
    Create a `.env.local` file in the root directory:
    ```env
+   # Dynamic.xyz Authentication
+   NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID=your_dynamic_environment_id
+   
    # Mapbox
    NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_access_token
    
@@ -70,11 +77,106 @@ Kleo is a decentralized storytelling platform that allows users to share stories
 
 ## Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | Your Mapbox access token | Yes |
-| `NEXT_PUBLIC_NFT_STORAGE_TOKEN` | Your NFT.Storage API token | Yes |
-| `NEXT_PUBLIC_XRPL_NETWORK` | XRPL network (testnet/mainnet) | No |
+Create a `.env.local` file in the root directory with the following variables:
+
+```env
+# Mapbox (Required)
+NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_access_token_here
+
+# IPFS Storage (Required)
+NEXT_PUBLIC_NFT_STORAGE_TOKEN=your_nft_storage_token_here
+
+# Web3.Storage (Required - for enhanced IPFS integration)
+NEXT_PUBLIC_WEB3_STORAGE_TOKEN=your_web3_storage_token_here
+
+# Dynamic.xyz (Required)
+NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID=your_dynamic_environment_id_here
+
+# OpenAI API (Optional - for AI summaries)
+NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
+
+# Ripple EVM NFT Contract (Required - after deployment)
+NEXT_PUBLIC_NFT_CONTRACT_ADDRESS=your_deployed_contract_address_here
+
+# The Graph Subgraph (Required - after deployment)
+NEXT_PUBLIC_GRAPH_ENDPOINT=your_subgraph_graphql_endpoint_here
+```
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | ✅ | Mapbox access token for map functionality |
+| `NEXT_PUBLIC_NFT_STORAGE_TOKEN` | ✅ | NFT.Storage token for IPFS file uploads |
+| `NEXT_PUBLIC_WEB3_STORAGE_TOKEN` | ✅ | Web3.Storage token for enhanced IPFS integration and Graph database |
+| `NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID` | ✅ | Dynamic.xyz environment ID for wallet authentication |
+| `NEXT_PUBLIC_OPENAI_API_KEY` | ❌ | OpenAI API key for AI-powered article summarization |
+| `NEXT_PUBLIC_NFT_CONTRACT_ADDRESS` | ✅ | Deployed KleoNFT contract address on Ripple EVM |
+| `NEXT_PUBLIC_GRAPH_ENDPOINT` | ✅ | The Graph subgraph GraphQL endpoint |
+
+## Smart Contract Deployment
+
+### Prerequisites
+- Node.js 18+
+- npm or yarn
+- MetaMask wallet with Ripple EVM testnet configured
+
+### 1. Install Hardhat Dependencies
+```bash
+npm install --save-dev hardhat @nomicfoundation/hardhat-toolbox @openzeppelin/contracts
+```
+
+### 2. Configure Environment
+Create a `.env` file in the root directory:
+```env
+PRIVATE_KEY=your_wallet_private_key_here
+```
+
+### 3. Deploy Contract
+```bash
+# Deploy to Ripple EVM testnet
+npx hardhat run scripts/deploy-nft.js --network rippleEVMTestnet
+```
+
+### 4. Verify Contract
+1. Go to [Ripple EVM Explorer](https://evm-sidechain.xrpl.org/)
+2. Search for your deployed contract address
+3. Click "Verify Contract"
+4. Use compiler version: 0.8.19
+5. Use optimization: 200 runs
+
+### 5. Update Environment Variables
+Add the deployed contract address to your `.env.local`:
+```env
+NEXT_PUBLIC_NFT_CONTRACT_ADDRESS=your_deployed_contract_address
+```
+
+## Features
+
+- **Interactive Map Interface** - Click anywhere on the map to add stories
+- **Dynamic.xyz Authentication** - Secure wallet-based authentication
+- **Video Upload Support** - Upload and play videos directly on the map
+- **News Article Processing** - Submit news URLs with AI summarization
+- **AI-Powered Fake News Detection** - Verify article credibility before posting
+- **Mercury Parser Integration** - Advanced article content extraction
+- **OpenAI Integration** - Real AI summaries for news articles
+- **Web3.Storage Integration** - Enhanced IPFS storage with Graph database
+- **Graph Database Analytics** - Advanced relationship mapping and analytics
+- **Rate Limiting** - 1 post per 5 minutes per wallet
+- **Reward System** - Earn XP for contributions
+- **IPFS Storage** - Decentralized content storage
+- **XRPL Integration** - Blockchain rewards and wallet support
+
+## Authentication System
+
+### Dynamic.xyz Integration
+- **Wallet Support**: EVM wallets (MetaMask, WalletConnect, Coinbase) and XRPL wallets
+- **User Data**: Stores wallet_address, wallet_type, ensName, and email in local state
+- **Anonymous Prevention**: Users must connect a wallet to post stories
+- **Seamless UX**: One-click wallet connection with persistent sessions
+
+### Supported Wallets
+- **EVM**: MetaMask, WalletConnect, Coinbase Wallet
+- **XRPL**: XUMM and other XRPL wallets (via fallback)
+- **ENS Support**: Automatic ENS name resolution for Ethereum wallets
 
 ## Architecture
 

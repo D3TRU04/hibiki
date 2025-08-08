@@ -90,14 +90,6 @@ export function useMap() {
                 }
               </div>
             ` : ''}
-            <div class="mt-2 text-xs text-gray-500">
-              <span class="bg-gray-100 px-2 py-1 rounded">${post.type}</span>
-              ${post.tags && post.tags.length > 0 ? `
-                <div class="mt-1">
-                  ${post.tags.map(tag => `<span class="bg-blue-100 text-blue-700 px-2 py-1 rounded mr-1">#${tag}</span>`).join('')}
-                </div>
-              ` : ''}
-            </div>
           </div>
         `);
 
@@ -140,14 +132,6 @@ export function useMap() {
               }
             </div>
           ` : ''}
-          <div class="mt-2 text-xs text-gray-500">
-            <span class="bg-gray-100 px-2 py-1 rounded">${newPost.type}</span>
-            ${newPost.tags && newPost.tags.length > 0 ? `
-              <div class="mt-1">
-                ${newPost.tags.map(tag => `<span class="bg-blue-100 text-blue-700 px-2 py-1 rounded mr-1">#${tag}</span>`).join('')}
-              </div>
-            ` : ''}
-          </div>
         </div>
       `);
 

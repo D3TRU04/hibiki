@@ -1,0 +1,26 @@
+specVersion: 0.0.5
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: KleoEvents
+    network: mainnet
+    source:
+      address: "0x0000000000000000000000000000000000000000"  # Placeholder - update after deploy
+      abi: KleoEvents
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - NFTMinted
+        - User
+        - GlobalStats
+      abis:
+        - name: KleoEvents
+          file: ./abis/KleoEvents.json
+      eventHandlers:
+        - event: NFTMinted(indexed address,indexed uint256,string,string,uint256)
+          handler: handleNFTMinted
+      file: ./src/mapping.ts 
