@@ -12,9 +12,10 @@ import {
 const GLOBAL_STATS_ID = "kleo-global-stats"
 
 export function handleNFTMinted(event: NFTMintedEvent): void {
-  let entity = new NFTMintedEntity(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  )
+  // Build a string ID from tx hash + log index
+  const id = event.transaction.hash.toHex() + '-' + event.logIndex.toString()
+
+  let entity = new NFTMintedEntity(id)
   
   entity.owner = event.params.owner.toHexString()
   entity.token_id = event.params.tokenId

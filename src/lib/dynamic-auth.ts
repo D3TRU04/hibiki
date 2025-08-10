@@ -1,6 +1,6 @@
 'use client';
 
-import { DynamicContextProvider, DynamicWagmiConnector } from '@dynamic-labs/sdk-react';
+import { DynamicContextProvider, useDynamicContext, DynamicWidget } from '@dynamic-labs/sdk-react';
 import { EthereumWalletConnectors } from '@dynamic-labs/ethereum';
 import { Wallet } from './types';
 
@@ -11,10 +11,10 @@ const DYNAMIC_CONFIG = {
   settings: {
     walletList: ['metamask', 'walletconnect', 'coinbase'],
     eventsCallbacks: {
-      onAuthSuccess: (args: any) => {
+      onAuthSuccess: (args: unknown) => {
         console.log('Dynamic auth success:', args);
       },
-      onAuthError: (args: any) => {
+      onAuthError: (args: unknown) => {
         console.error('Dynamic auth error:', args);
       },
       onLogout: () => {
@@ -102,7 +102,7 @@ export class DynamicAuthService {
   }
 
   // Handle wallet connection from Dynamic
-  handleWalletConnection(walletData: any) {
+  handleWalletConnection(walletData: { address: string; chain?: string; ensName?: string; email?: string; userId?: string }) {
     const wallet: DynamicWallet = {
       address: walletData.address,
       type: walletData.chain === 'xrpl' ? "XRPL" : "EVM",
@@ -166,4 +166,4 @@ export const dynamicAuthService = DynamicAuthService.getInstance();
 export { DYNAMIC_CONFIG };
 
 // Export Dynamic components for use in layout
-export { DynamicContextProvider, DynamicWagmiConnector }; 
+export { DynamicContextProvider, useDynamicContext, DynamicWidget }; 

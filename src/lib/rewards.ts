@@ -21,13 +21,13 @@ export interface UserXP {
 export function calculateRewardPoints(post: KleoPost, user?: User): number {
   let points = XP_CONFIG.BASE_POST;
   
-  // AI-verified news content
-  if (post.media_type === 'news' && post.is_reliable) {
+  // AI-verified news content (infer from content_type or presence of source_url)
+  if (post.content_type === 'news' && post.is_reliable) {
     points += XP_CONFIG.AI_VERIFIED_NEWS;
   }
   
   // Video upload
-  if (post.media_type === 'video') {
+  if (post.type === 'video') {
     points += XP_CONFIG.VIDEO_UPLOAD;
   }
   
@@ -92,13 +92,13 @@ export function getPostXPBreakdown(post: KleoPost, user?: User): {
   const reasons: string[] = ['Base post (+1 XP)'];
   
   // AI-verified news content
-  if (post.media_type === 'news' && post.is_reliable) {
+  if (post.content_type === 'news' && post.is_reliable) {
     total += XP_CONFIG.AI_VERIFIED_NEWS;
     reasons.push(`AI-verified news (+${XP_CONFIG.AI_VERIFIED_NEWS} XP)`);
   }
   
   // Video upload
-  if (post.media_type === 'video') {
+  if (post.type === 'video') {
     total += XP_CONFIG.VIDEO_UPLOAD;
     reasons.push(`Video upload (+${XP_CONFIG.VIDEO_UPLOAD} XP)`);
   }
@@ -137,9 +137,10 @@ export function getPostProofs(walletAddress: string): Array<{
   if (typeof window === 'undefined') return [];
   
   const postProofs = JSON.parse(localStorage.getItem('kleo_post_proofs') || '{}');
-  return Object.entries(postProofs)
-    .filter(([_, proof]: [string, any]) => proof.walletAddress === walletAddress)
-    .map(([postCid, proof]: [string, any]) => ({
+  const typed: Record<string, { walletAddress: string; timestamp: string; userXP: number }> = postProofs;
+  return Object.entries(typed)
+    .filter(([_, proof]) => proof.walletAddress === walletAddress)
+    .map(([postCid, proof]) => ({
       postCid,
       timestamp: proof.timestamp,
       userXP: proof.userXP

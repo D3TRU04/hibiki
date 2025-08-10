@@ -1,4 +1,4 @@
-import { NFTStorage, File } from 'nft.storage';
+import { pinFileToIPFS, pinJSONToIPFS } from './pinata';
 import { 
   IPFSMetadata, 
   IPFSUserProfile, 
@@ -9,13 +9,10 @@ import {
   RewardSystem 
 } from './types';
 
-const NFT_STORAGE_TOKEN = process.env.NEXT_PUBLIC_NFT_STORAGE_TOKEN;
-
-if (!NFT_STORAGE_TOKEN) {
-  console.warn('NFT.Storage token not found. IPFS storage will be disabled.');
+export async function uploadBlob(content: Blob): Promise<string> {
+  const cid = await pinFileToIPFS(new File([content], 'content.bin'));
+  return `ipfs://${cid}`;
 }
-
-const client = NFT_STORAGE_TOKEN ? new NFTStorage({ token: NFT_STORAGE_TOKEN }) : null;
 
 // Global state management
 let globalState: IPFSGlobalState = {
@@ -51,7 +48,15 @@ export class IPFSStorage {
   // Initialize global state
   private async loadGlobalState() {
     try {
-      if (this.globalStateUrl && client) {
+      // Try pointer API first
+      const pointerResp = await fetch('/api/state/latest', { cache: 'no-store' }).catch(() => null as any);
+      if (pointerResp && pointerResp.ok) {
+        const data = (await pointerResp.json()) as { cid?: string | null };
+        if (data?.cid) {
+          this.globalStateUrl = `ipfs://${data.cid}`;
+        }
+      }
+      if (this.globalStateUrl) {
         const response = await fetch(this.getIPFSGatewayUrl(this.globalStateUrl));
         if (response.ok) {
           globalState = await response.json();
@@ -64,19 +69,20 @@ export class IPFSStorage {
 
   // Save global state to IPFS
   private async saveGlobalState(): Promise<string> {
-    if (!client) {
-      console.warn('IPFS client not initialized, using local storage fallback');
-      return 'local://global-state.json';
-    }
-
     try {
       globalState.last_updated = new Date().toISOString();
-      const stateBlob = new Blob([JSON.stringify(globalState)], { type: 'application/json' });
-      const stateFile = new File([stateBlob], 'global-state.json', { type: 'application/json' });
-      const cid = await client.storeBlob(stateFile);
+      const cid = await pinJSONToIPFS(globalState);
       const url = `ipfs://${cid}`;
       this.globalStateUrl = url;
       console.log('Global state saved to IPFS:', url);
+      // Update pointer on server (best-effort)
+      try {
+        await fetch('/api/state/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ latest: cid }),
+        });
+      } catch {}
       return url;
     } catch (error) {
       console.error('Failed to save to IPFS, using local fallback:', error);
@@ -106,24 +112,17 @@ export class IPFSStorage {
     userCache.set(userId, user);
 
     // Try to save to IPFS if available
-    if (client) {
       try {
         const userProfile: IPFSUserProfile = {
           ...user,
           posts: []
         };
 
-        const profileBlob = new Blob([JSON.stringify(userProfile)], { type: 'application/json' });
-        const profileFile = new File([profileBlob], `user-${userId}.json`, { type: 'application/json' });
-        const profileCid = await client.storeBlob(profileFile);
+      const profileCid = await pinJSONToIPFS(userProfile);
         user.ipfs_profile_url = `ipfs://${profileCid}`;
-        
         await this.saveGlobalState();
       } catch (error) {
         console.error('Failed to save user to IPFS:', error);
-        user.ipfs_profile_url = `local://user-${userId}.json`;
-      }
-    } else {
       user.ipfs_profile_url = `local://user-${userId}.json`;
     }
 
@@ -192,17 +191,14 @@ export class IPFSStorage {
     globalState.users[userId] = updatedUser;
     userCache.set(userId, updatedUser);
 
-    // Try to update IPFS profile if available
-    if (client) {
+    // Try to update IPFS profile
       try {
         const userProfile: IPFSUserProfile = {
           ...updatedUser,
           posts: [] // We'll maintain posts separately
         };
 
-        const profileBlob = new Blob([JSON.stringify(userProfile)], { type: 'application/json' });
-        const profileFile = new File([profileBlob], `user-${userId}.json`, { type: 'application/json' });
-        const profileCid = await client.storeBlob(profileFile);
+      const profileCid = await pinJSONToIPFS(userProfile);
         const profileUrl = `ipfs://${profileCid}`;
 
         updatedUser.ipfs_profile_url = profileUrl;
@@ -210,9 +206,6 @@ export class IPFSStorage {
         await this.saveGlobalState();
       } catch (error) {
         console.error('Failed to update user on IPFS:', error);
-        updatedUser.ipfs_profile_url = `local://user-${userId}.json`;
-      }
-    } else {
       updatedUser.ipfs_profile_url = `local://user-${userId}.json`;
     }
 
@@ -233,49 +226,46 @@ export class IPFSStorage {
 
     let mediaUrl: string | undefined;
 
-    // Upload media if provided and IPFS is available
-    if (postData.mediaFile && client) {
+    // Upload media if provided
+    if (postData.mediaFile) {
       try {
         const mediaBlob = new Blob([postData.mediaFile], { type: postData.mediaFile.type });
         const mediaFile = new File([mediaBlob], postData.mediaFile.name, { type: postData.mediaFile.type });
-        const mediaCid = await client.storeBlob(mediaFile);
+        const mediaCid = await pinFileToIPFS(mediaFile);
         mediaUrl = `ipfs://${mediaCid}`;
       } catch (error) {
         console.error('Failed to upload media to IPFS:', error);
         mediaUrl = `local://media-${postId}.${postData.mediaFile.name.split('.').pop()}`;
       }
-    } else if (postData.mediaFile) {
-      mediaUrl = `local://media-${postId}.${postData.mediaFile.name.split('.').pop()}`;
     }
+
+    // Derive post/media type from provided file (only 'video' or 'text')
+    const derivedPostType: 'text' | 'video' = postData.mediaFile && postData.mediaFile.type?.startsWith('video')
+      ? 'video'
+      : 'text';
 
     // Create metadata
     const metadata: IPFSMetadata = {
-      title: postData.content.substring(0, 100),
-      content: postData.content,
+      title: postData.text.substring(0, 100),
+      content: postData.text,
       lat: postData.lat,
       lng: postData.lng,
       timestamp: nowISO,
       user_id: user.id,
       media_url: mediaUrl,
-      type: postData.type,
+      type: derivedPostType,
       far_score: user.far_score,
       engagement_score: 0
     };
 
     let metadataUrlFinal: string;
 
-    // Upload metadata if IPFS is available
-    if (client) {
+    // Upload metadata
       try {
-        const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
-        const metadataFile = new File([metadataBlob], 'metadata.json', { type: 'application/json' });
-        const metadataCid = await client.storeBlob(metadataFile);
+      const metadataCid = await pinJSONToIPFS(metadata);
         metadataUrlFinal = `ipfs://${metadataCid}`;
       } catch (error) {
         console.error('Failed to upload metadata to IPFS:', error);
-        metadataUrlFinal = `local://metadata-${postId}.json`;
-      }
-    } else {
       metadataUrlFinal = `local://metadata-${postId}.json`;
     }
 
@@ -283,8 +273,8 @@ export class IPFSStorage {
     const post: Post = {
       id: postId,
       user_id: user.id,
-      type: postData.type,
-      content: postData.content,
+      type: derivedPostType,
+      content: postData.text,
       lat: postData.lat,
       lng: postData.lng,
       media_url: mediaUrl,
@@ -297,9 +287,9 @@ export class IPFSStorage {
       user: user,
       tags: postData.tags || [],
       contributor_id: postData.contributor_id,
-      wallet_type: postData.wallet_type,
-      reward_points: postData.reward_points,
-      post_cid: postData.post_cid
+      wallet_type: postData.wallet?.type,
+      reward_points: undefined,
+      post_cid: undefined
     };
 
     // Store post in global state
@@ -308,7 +298,7 @@ export class IPFSStorage {
     await this.saveGlobalState();
 
     // Update user's contribution points
-    const pointsEarned = this.calculatePointsEarned(postData.type, user.far_score);
+    const pointsEarned = this.calculatePointsEarned(derivedPostType, user.far_score);
     user.contribution_points += pointsEarned;
     await this.updateUser(user.id, { contribution_points: user.contribution_points });
 
@@ -323,15 +313,11 @@ export class IPFSStorage {
 
   // Upload a single file to IPFS
   async uploadFile(file: File): Promise<string> {
-    if (!client) {
-      throw new Error('IPFS client not initialized');
-    }
-
     try {
       const fileBlob = new Blob([file], { type: file.type });
       const ipfsFile = new File([fileBlob], file.name, { type: file.type });
-      const cid = await client.storeBlob(ipfsFile);
-      return cid;
+      const cid = await pinFileToIPFS(ipfsFile);
+      return `ipfs://${cid}`;
     } catch (error) {
       console.error('Failed to upload file to IPFS:', error);
       throw error;
@@ -391,12 +377,6 @@ export class IPFSStorage {
     let basePoints = 0;
     
     switch (postType) {
-      case 'text':
-        basePoints = 10;
-        break;
-      case 'audio':
-        basePoints = 25;
-        break;
       case 'video':
         basePoints = 50;
         break;

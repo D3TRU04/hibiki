@@ -3,6 +3,7 @@
 import NavbarDesktop from '@/components/NavbarDesktop';
 import NavbarActions from '@/components/NavbarActions';
 import NavbarMobile from '@/components/NavbarMobile';
+import type { Wallet as KleoWallet } from '@/lib/types';
 
 interface GlassyNavbarProps {
   onAddStory?: () => void;
@@ -10,6 +11,8 @@ interface GlassyNavbarProps {
   onToggleFeed?: () => void;
   onToggleUserPanel?: () => void;
   isAuthenticated?: boolean;
+  wallet?: KleoWallet | null;
+  onDisconnect?: () => void;
 }
 
 export default function GlassyNavbar({ 
@@ -17,7 +20,9 @@ export default function GlassyNavbar({
   onAuthClick, 
   onToggleFeed, 
   onToggleUserPanel,
-  isAuthenticated = false
+  isAuthenticated = false,
+  wallet = null,
+  onDisconnect
 }: GlassyNavbarProps) {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 px-4 py-3">
@@ -51,6 +56,8 @@ export default function GlassyNavbar({
             onToggleFeed={onToggleFeed}
             onToggleUserPanel={onToggleUserPanel}
             isAuthenticated={isAuthenticated}
+            wallet={wallet}
+            onDisconnect={onDisconnect}
           />
           
           <NavbarMobile

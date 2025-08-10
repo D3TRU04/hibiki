@@ -15,8 +15,7 @@ module.exports = {
   networks: {
     // Ripple EVM Sidechain Testnet
     rippleEVMTestnet: {
-      url: "https://rpc-evm-sidechain.xrpl.org",
-      chainId: 1440002,
+      url: process.env.RIPPLE_EVM_RPC_URL || "",
       accounts: process.env.EVM_DEPLOYER_PRIVATE_KEY
         ? [process.env.EVM_DEPLOYER_PRIVATE_KEY]
         : (process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : []),
@@ -25,8 +24,7 @@ module.exports = {
     },
     // Ripple EVM Sidechain Mainnet (for production)
     rippleEVMMainnet: {
-      url: "https://rpc-evm-sidechain.xrpl.org",
-      chainId: 1440001,
+      url: process.env.RIPPLE_EVM_MAINNET_RPC_URL || "",
       accounts: process.env.EVM_DEPLOYER_PRIVATE_KEY
         ? [process.env.EVM_DEPLOYER_PRIVATE_KEY]
         : (process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : []),
@@ -35,7 +33,7 @@ module.exports = {
     },
     // Local development
     hardhat: {
-      chainId: 1337,
+      // No chainId forcing here to avoid conflicts when forking
     },
   },
   etherscan: {

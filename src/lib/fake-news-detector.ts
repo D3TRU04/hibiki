@@ -21,6 +21,14 @@ export interface NewsSource {
   factCheckRating?: number; // 0-100
 }
 
+type ContentAnalysis = {
+  hasFactualClaims: boolean;
+  hasEmotionalLanguage: boolean;
+  hasMultipleSources: boolean;
+  hasAuthorInfo: boolean;
+  hasPublicationDate: boolean;
+};
+
 export class FakeNewsDetectorService {
   private static instance: FakeNewsDetectorService;
 
@@ -138,13 +146,7 @@ export class FakeNewsDetectorService {
     };
   }
 
-  private analyzeContent(content: string, title: string): {
-    hasFactualClaims: boolean;
-    hasEmotionalLanguage: boolean;
-    hasMultipleSources: boolean;
-    hasAuthorInfo: boolean;
-    hasPublicationDate: boolean;
-  } {
+  private analyzeContent(content: string, title: string): ContentAnalysis {
     const fullText = `${title} ${content}`.toLowerCase();
     
     // Check for factual claims (numbers, dates, statistics)
@@ -177,7 +179,7 @@ export class FakeNewsDetectorService {
     };
   }
 
-  private calculateReliabilityScore(sourceInfo: NewsSource, contentAnalysis: any): number {
+  private calculateReliabilityScore(sourceInfo: NewsSource, contentAnalysis: ContentAnalysis): number {
     let score = 50; // Base score
     
     // Source credibility (40% weight)
@@ -208,7 +210,7 @@ export class FakeNewsDetectorService {
     return Math.max(0, Math.min(100, score));
   }
 
-  private generateReasons(sourceInfo: NewsSource, contentAnalysis: any, score: number): string[] {
+  private generateReasons(sourceInfo: NewsSource, contentAnalysis: ContentAnalysis, _score: number): string[] {
     const reasons: string[] = [];
     
     // Source-based reasons
@@ -246,7 +248,7 @@ export class FakeNewsDetectorService {
     return reasons;
   }
 
-  private generateRecommendations(sourceInfo: NewsSource, contentAnalysis: any, score: number): string[] {
+  private generateRecommendations(sourceInfo: NewsSource, contentAnalysis: ContentAnalysis, score: number): string[] {
     const recommendations: string[] = [];
     
     if (score < 60) {

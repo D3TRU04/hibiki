@@ -61,23 +61,19 @@ export default function StoriesPage() {
       // Convert KleoPost[] to Post[]
       const convertedPosts: Post[] = fetchedKleoPosts.map(kleoPost => ({
         id: kleoPost.id,
-        user_id: kleoPost.contributor_id || 'anonymous',
-        type: kleoPost.media_type || 'text',
-        content: kleoPost.text,
+        user_id: kleoPost.user_id || 'anonymous',
+        type: kleoPost.type === 'video' ? 'video' : 'text',
+        content: kleoPost.content,
         lat: kleoPost.lat,
         lng: kleoPost.lng,
-        media_url: kleoPost.ipfs_url,
-        ipfs_post_url: kleoPost.ipfs_url,
-        far_score: 0,
-        engagement_score: 0,
-        flags: 0,
+        media_url: kleoPost.media_url || kleoPost.ipfs_metadata_url,
+        ipfs_post_url: kleoPost.ipfs_metadata_url,
+        far_score: kleoPost.far_score || 0,
+        engagement_score: kleoPost.engagement_score || 0,
+        flags: kleoPost.flags || 0,
         created_at: kleoPost.created_at,
         updated_at: kleoPost.created_at,
-        tags: kleoPost.tags,
-        contributor_id: kleoPost.contributor_id,
-        wallet_type: kleoPost.wallet_type,
-        reward_points: kleoPost.reward_points,
-        post_cid: kleoPost.post_cid
+        tags: [],
       }));
       setPosts(convertedPosts);
     } catch (error) {
@@ -262,7 +258,6 @@ export default function StoriesPage() {
               {post.media_url && (
                 <div className="mt-4 p-3 bg-white/5 rounded-lg">
                   <div className="flex items-center space-x-2 text-xs text-gray-300">
-                    {post.type === 'audio' && <Mic className="w-3 h-3" />}
                     {post.type === 'video' && <Video className="w-3 h-3" />}
                     <span>Media attached</span>
                   </div>

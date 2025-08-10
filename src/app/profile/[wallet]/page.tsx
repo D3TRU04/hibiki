@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { graphClient, GraphQLPost, GraphQLUser } from '@/lib/graph-client';
 import { useDynamicWallet } from '@/hooks/useDynamicWallet';
-import ProfileHeader from '@/components/ProfileHeader';
-import ProfilePosts from '@/components/ProfilePosts';
+import ProfileHeader from '@/app/profile/components/ProfileHeader';
+import ProfilePosts from '@/app/profile/components/ProfilePosts';
 import NFTGallery from '@/components/NFTGallery';
 
 export default function ProfilePage() {
@@ -31,15 +31,12 @@ export default function ProfilePage() {
         setIsLoading(true);
         setError(null);
 
-        // Check if this is the current user's profile
         const ownProfile = isConnected && currentWallet?.address.toLowerCase() === walletAddress.toLowerCase();
         setIsOwnProfile(ownProfile);
 
-        // Load user profile from The Graph
         const profile = await graphClient.getUserProfile(walletAddress);
         setUserProfile(profile);
 
-        // Load user posts from The Graph
         const posts = await graphClient.getPostsByWallet(walletAddress);
         setUserPosts(posts);
 
@@ -86,7 +83,6 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       <div className="container mx-auto px-4 py-8">
-        {/* Profile Header */}
         <ProfileHeader
           walletAddress={walletAddress}
           userProfile={userProfile}
@@ -94,13 +90,11 @@ export default function ProfilePage() {
           isOwnProfile={isOwnProfile}
         />
 
-        {/* Posts Section */}
         <ProfilePosts
           userPosts={userPosts}
           isOwnProfile={isOwnProfile}
         />
 
-        {/* NFT Gallery Section */}
         <div className="mt-8">
           <NFTGallery walletAddress={walletAddress} />
         </div>

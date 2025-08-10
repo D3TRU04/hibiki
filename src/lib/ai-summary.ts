@@ -19,11 +19,8 @@ class AISummaryService {
         summary: response,
         keywords,
         confidence: 0.85,
-        generated_at: new Date().toISOString(),
-        model_used: 'gpt-3.5-turbo',
-        prompt_tokens: Math.ceil(prompt.length / 4),
-        completion_tokens: Math.ceil(response.length / 4)
-      };
+        // extra metadata omitted to match AISummary type
+      } as AISummary;
     } catch (error) {
       console.error('AI Summary generation failed:', error);
       return this.getFallbackSummary(request);
@@ -50,11 +47,8 @@ class AISummaryService {
       summary: fallbackText,
       keywords: ['content', 'location', 'submission'],
       confidence: 0.1,
-      generated_at: new Date().toISOString(),
-      model_used: 'fallback',
-      prompt_tokens: 0,
-      completion_tokens: 0
-    };
+      // extra metadata omitted
+    } as AISummary;
   }
 }
 

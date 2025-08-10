@@ -155,7 +155,7 @@ export default function AboutPage() {
             </div>
             <div className="text-center">
               <h3 className="text-lg font-semibold text-white mb-2">Storage</h3>
-              <p className="text-gray-300 text-sm">IPFS via NFT.Storage for decentralized data</p>
+              <p className="text-gray-300 text-sm">IPFS via Pinata for decentralized data</p>
             </div>
             <div className="text-center">
               <h3 className="text-lg font-semibold text-white mb-2">Blockchain</h3>

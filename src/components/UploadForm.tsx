@@ -1,7 +1,7 @@
 'use client';
 
 import { UploadFormData } from '@/lib/types';
-import { Mic, Video, FileText, MapPin } from 'lucide-react';
+import { Video, FileText, MapPin } from 'lucide-react';
 
 interface UploadFormProps {
   formData: UploadFormData;
@@ -76,33 +76,6 @@ export default function UploadForm({
           Media Upload (Optional)
         </label>
         <div className="space-y-3">
-          {/* Audio Upload */}
-          <div className="flex items-center space-x-3">
-            <label
-              htmlFor="audio"
-              className="flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-lg cursor-pointer transition-colors duration-200"
-            >
-              <Mic className="w-4 h-4 mr-2 text-gray-600" />
-              Audio Recording
-            </label>
-            <input
-              id="audio"
-              type="file"
-              accept="audio/*"
-              onChange={onFileChange}
-              className="hidden"
-              disabled={!!formData.videoFile}
-            />
-            {formData.audioFile && (
-              <span className="text-sm text-green-600 flex items-center">
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                {formData.audioFile.name}
-              </span>
-            )}
-          </div>
-
           {/* Video Upload */}
           <div className="flex items-center space-x-3">
             <label
@@ -118,7 +91,6 @@ export default function UploadForm({
               accept="video/*"
               onChange={onFileChange}
               className="hidden"
-              disabled={!!formData.audioFile}
             />
             {formData.videoFile && (
               <span className="text-sm text-green-600 flex items-center">
@@ -131,7 +103,7 @@ export default function UploadForm({
           </div>
         </div>
         <p className="text-xs text-gray-500 mt-1">
-          Choose either audio OR video, not both. Supported: MP3, WAV, MP4, MOV
+          Supported: MP4, MOV
         </p>
       </div>
 

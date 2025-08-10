@@ -8,7 +8,6 @@ import { authService } from '@/lib/auth';
 export function useUploadModal() {
   const [formData, setFormData] = useState<UploadFormData>({
     text: '',
-    audioFile: undefined,
     videoFile: undefined,
     honeypot: '',
   });
@@ -23,29 +22,14 @@ export function useUploadModal() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Clear other file types when one is selected
-    if (e.target.id === 'audio') {
-      if (file.type.startsWith('audio/')) {
-        setFormData((prev: UploadFormData) => ({ 
-          ...prev, 
-          audioFile: file, 
-          videoFile: undefined 
-        }));
-        setError(null);
-      } else {
-        setError('Please select an audio file');
-      }
-    } else if (e.target.id === 'video') {
-      if (file.type.startsWith('video/')) {
-        setFormData((prev: UploadFormData) => ({ 
-          ...prev, 
-          videoFile: file, 
-          audioFile: undefined 
-        }));
-        setError(null);
-      } else {
-        setError('Please select a video file');
-      }
+    if (file.type.startsWith('video/')) {
+      setFormData((prev: UploadFormData) => ({ 
+        ...prev, 
+        videoFile: file
+      }));
+      setError(null);
+    } else {
+      setError('Please select a video file');
     }
   };
 
@@ -80,12 +64,12 @@ export function useUploadModal() {
 
     try {
       const postData: CreatePostData = {
-        type: formData.videoFile ? 'video' : (formData.audioFile ? 'audio' : 'text'),
-        content: formData.text.trim(),
+        text: formData.text.trim(),
         lat,
         lng,
-        mediaFile: formData.videoFile || formData.audioFile,
-        honeypot: formData.honeypot,
+        mediaFile: formData.videoFile,
+        content_type: formData.videoFile ? 'media' : 'news',
+        newsUrl: undefined,
       };
 
       const newPost = await createPost(postData);
@@ -107,7 +91,6 @@ export function useUploadModal() {
   const handleClose = () => {
     setFormData({ 
       text: '', 
-      audioFile: undefined, 
       videoFile: undefined, 
       honeypot: '' 
     });

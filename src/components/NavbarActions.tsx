@@ -1,9 +1,8 @@
 'use client';
 
 import { User, List, Wallet, LogOut, UserCheck } from 'lucide-react';
-import { useDynamicWallet } from '@/hooks/useDynamicWallet';
-import { getWalletDisplayName } from '@/lib/identity';
 import Link from 'next/link';
+import type { Wallet as KleoWallet } from '@/lib/types';
 
 interface NavbarActionsProps {
   onAddStory?: () => void;
@@ -11,6 +10,8 @@ interface NavbarActionsProps {
   onToggleFeed?: () => void;
   onToggleUserPanel?: () => void;
   isAuthenticated?: boolean;
+  wallet?: KleoWallet | null;
+  onDisconnect?: () => void;
 }
 
 export default function NavbarActions({
@@ -18,12 +19,12 @@ export default function NavbarActions({
   onAuthClick,
   onToggleFeed,
   onToggleUserPanel,
-  isAuthenticated = false
+  isAuthenticated = false,
+  wallet = null,
+  onDisconnect
 }: NavbarActionsProps) {
-  const { wallet, disconnect } = useDynamicWallet();
-
   const handleDisconnect = () => {
-    disconnect();
+    onDisconnect?.();
   };
 
   return (
@@ -58,7 +59,7 @@ export default function NavbarActions({
           <div className="hidden md:flex items-center space-x-2 px-4 py-2 bg-white/20 backdrop-blur-sm border border-white/30 rounded-lg text-white font-medium">
             <User size={16} />
             <span className="max-w-[120px] truncate">
-              {getWalletDisplayName(wallet)}
+              {wallet.ensName || wallet.address}
             </span>
           </div>
           

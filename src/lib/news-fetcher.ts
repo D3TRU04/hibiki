@@ -156,7 +156,6 @@ export class NewsFetcherService {
       'body'
     ];
     
-    let content = '';
     let bestContent = '';
     let bestScore = 0;
     

@@ -1,4 +1,4 @@
-import { ethers } from 'ethers';
+import { ethers, parseEther, formatEther, parseUnits, JsonRpcProvider, Contract } from 'ethers';
 import { KleoPost } from './types';
 
 // NFT Contract ABI (updated for Ripple EVM with XRPL integration)
@@ -26,12 +26,12 @@ const CONTRACT_CONFIG = {
   // Contract address (will be deployed)
   contractAddress: process.env.NEXT_PUBLIC_NFT_CONTRACT_ADDRESS || '',
   // Spam prevention settings
-  mintFee: ethers.utils.parseEther('0.001'), // 0.001 XRP (~$0.001)
+  mintFee: parseEther('0.001'), // 0.001 XRP (~$0.001)
   maxMintsPerUser: 10,
   mintCooldown: 300, // 5 minutes
   // Gas settings
-  gasLimit: 300000,
-  gasPrice: ethers.utils.parseUnits('30', 'gwei')
+  gasLimit: BigInt(300000),
+  gasPrice: parseUnits('30', 'gwei')
 };
 
 export interface NFTMintResult {
@@ -53,8 +53,8 @@ export interface UserMintStatus {
 
 export class NFTContractService {
   private static instance: NFTContractService;
-  private provider: ethers.providers.JsonRpcProvider | null = null;
-  private contract: ethers.Contract | null = null;
+  private provider: JsonRpcProvider | null = null;
+  private contract: Contract | null = null;
 
   constructor() {
     this.initializeProvider();
@@ -69,10 +69,10 @@ export class NFTContractService {
 
   private initializeProvider() {
     try {
-      this.provider = new ethers.providers.JsonRpcProvider(CONTRACT_CONFIG.rpcUrl);
+      this.provider = new JsonRpcProvider(CONTRACT_CONFIG.rpcUrl);
       
       if (CONTRACT_CONFIG.contractAddress) {
-        this.contract = new ethers.Contract(
+        this.contract = new Contract(
           CONTRACT_CONFIG.contractAddress,
           NFT_CONTRACT_ABI,
           this.provider
@@ -90,7 +90,7 @@ export class NFTContractService {
         canMint: false,
         mintCount: 0,
         timeRemaining: 0,
-        mintFee: ethers.utils.formatEther(CONTRACT_CONFIG.mintFee),
+        mintFee: formatEther(CONTRACT_CONFIG.mintFee),
         reason: 'Contract not initialized'
       };
     }
@@ -103,14 +103,14 @@ export class NFTContractService {
       ]);
 
       const currentTime = Math.floor(Date.now() / 1000);
-      const timeSinceLastMint = currentTime - lastMintTime.toNumber();
+      const timeSinceLastMint = currentTime - Number(lastMintTime);
       const timeRemaining = Math.max(0, CONTRACT_CONFIG.mintCooldown - timeSinceLastMint);
 
-      const canMint = mintCount.toNumber() < CONTRACT_CONFIG.maxMintsPerUser && 
+      const canMint = Number(mintCount) < CONTRACT_CONFIG.maxMintsPerUser && 
                      timeRemaining === 0;
 
       let reason: string | undefined;
-      if (mintCount.toNumber() >= CONTRACT_CONFIG.maxMintsPerUser) {
+      if (Number(mintCount) >= CONTRACT_CONFIG.maxMintsPerUser) {
         reason = 'Mint limit reached';
       } else if (timeRemaining > 0) {
         reason = `Cooldown active: ${Math.ceil(timeRemaining / 60)} minutes remaining`;
@@ -118,9 +118,9 @@ export class NFTContractService {
 
       return {
         canMint,
-        mintCount: mintCount.toNumber(),
+        mintCount: Number(mintCount),
         timeRemaining,
-        mintFee: ethers.utils.formatEther(mintFee),
+        mintFee: formatEther(mintFee),
         reason
       };
     } catch (error) {
@@ -129,7 +129,7 @@ export class NFTContractService {
         canMint: false,
         mintCount: 0,
         timeRemaining: 0,
-        mintFee: ethers.utils.formatEther(CONTRACT_CONFIG.mintFee),
+        mintFee: formatEther(CONTRACT_CONFIG.mintFee),
         reason: 'Error checking status'
       };
     }
@@ -154,15 +154,15 @@ export class NFTContractService {
         };
       }
 
-      // Prepare metadata
+      // Prepare metadata (map from current KleoPost)
       const metadata = {
         name: `Kleo Story #${post.id}`,
-        description: post.text,
-        image: post.ipfs_url || '',
+        description: post.content,
+        image: post.media_url || '',
         attributes: [
-          { trait_type: 'Media Type', value: post.media_type },
+          { trait_type: 'Media Type', value: post.type },
           { trait_type: 'Location', value: `${post.lat}, ${post.lng}` },
-          { trait_type: 'Reward Points', value: post.reward_points || 0 },
+          { trait_type: 'Reward Points', value: 0 },
           { trait_type: 'Credibility Score', value: post.credibility_score || 0 },
           { trait_type: 'Is Reliable', value: post.is_reliable || false }
         ],
@@ -170,39 +170,32 @@ export class NFTContractService {
         ai_summary: post.ai_summary || ''
       };
 
+      // Determine CID to use (prefer metadata, fallback to media)
+      const cidUrl = post.ipfs_metadata_url || post.media_url || '';
+      const ipfsCID = cidUrl.startsWith('ipfs://') ? cidUrl.replace('ipfs://', '') : cidUrl;
+
       // Connect contract with signer
       const contractWithSigner = this.contract.connect(signer);
 
-      // Estimate gas
-      const gasEstimate = await contractWithSigner.estimateGas.mintNFT(
-        post.post_cid || '',
-        JSON.stringify(metadata),
-        userAddress, // xrplAddress
-        post.reward_points || 0 // xrplRewards
-      );
-
       // Mint NFT
-      const tx = await contractWithSigner.mintNFT(
-        post.post_cid || '',
+      const mintFn = contractWithSigner.getFunction('mintNFT');
+      const tx = await mintFn(
+        ipfsCID,
         JSON.stringify(metadata),
-        userAddress, // xrplAddress
-        post.reward_points || 0, // xrplRewards
-        {
-          value: CONTRACT_CONFIG.mintFee,
-          gasLimit: gasEstimate.mul(120).div(100) // Add 20% buffer
-        }
+        userAddress,
+        0,
+        { value: CONTRACT_CONFIG.mintFee, gasLimit: CONTRACT_CONFIG.gasLimit }
       );
 
       // Wait for transaction
       const receipt = await tx.wait();
-      const gasUsed = receipt.gasUsed.toString();
-      const cost = ethers.utils.formatEther(
-        receipt.gasUsed.mul(tx.gasPrice || CONTRACT_CONFIG.gasPrice)
-      );
+      const gasUsed = String(receipt.gasUsed);
+      const effectiveGasPrice = tx.gasPrice ?? CONTRACT_CONFIG.gasPrice;
+      const cost = formatEther(receipt.gasUsed * effectiveGasPrice);
 
       // Get token ID from event
-      const mintEvent = receipt.events?.find(event => event.event === 'NFTMinted');
-      const tokenId = mintEvent?.args?.tokenId?.toString();
+      const mintEvent = receipt.logs?.find((log: any) => log?.fragment?.name === 'NFTMinted');
+      const tokenId = mintEvent?.args?.tokenId ? String(mintEvent.args.tokenId) : undefined;
 
       console.log('NFT minted successfully:', {
         tokenId,
@@ -235,7 +228,7 @@ export class NFTContractService {
 
     try {
       const balance = await this.contract.balanceOf(userAddress);
-      return balance.toNumber();
+      return Number(balance);
     } catch (error) {
       console.error('Error getting user NFT balance:', error);
       return 0;
@@ -243,7 +236,7 @@ export class NFTContractService {
   }
 
   // Get NFT metadata
-  async getNFTMetadata(tokenId: string): Promise<any> {
+  async getNFTMetadata(tokenId: string): Promise<unknown> {
     if (!this.contract) return null;
 
     try {
@@ -265,7 +258,7 @@ export class NFTContractService {
       const xrplRewards = await this.contract.getXRPLRewards(tokenId);
       return {
         xrplAddress: xrplAddress,
-        xrplRewards: xrplRewards.toString()
+        xrplRewards: String(xrplRewards)
       };
     } catch (error) {
       console.error('Error getting XRPL details:', error);
@@ -279,7 +272,7 @@ export class NFTContractService {
 
     try {
       const totalRewards = await this.contract.getUserTotalXRPLRewards(userAddress);
-      return totalRewards.toString();
+      return String(totalRewards);
     } catch (error) {
       console.error('Error getting user total XRPL rewards:', error);
       return '0';
@@ -291,7 +284,7 @@ export class NFTContractService {
     return {
       network: CONTRACT_CONFIG.network,
       chainId: CONTRACT_CONFIG.chainId,
-      mintFee: ethers.utils.formatEther(CONTRACT_CONFIG.mintFee),
+      mintFee: formatEther(CONTRACT_CONFIG.mintFee),
       maxMintsPerUser: CONTRACT_CONFIG.maxMintsPerUser,
       mintCooldown: CONTRACT_CONFIG.mintCooldown,
       isTestnet: true

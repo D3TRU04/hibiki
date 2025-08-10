@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { DynamicContextProvider, DynamicWagmiConnector, DYNAMIC_CONFIG } from "@/lib/dynamic-auth";
+import DynamicProvider from "@/components/DynamicProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,21 +25,11 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <DynamicContextProvider {...DYNAMIC_CONFIG}>
-          <DynamicWagmiConnector>
-            {children}
-          </DynamicWagmiConnector>
-        </DynamicContextProvider>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <DynamicProvider>{children}</DynamicProvider>
       </body>
     </html>
   );

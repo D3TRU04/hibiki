@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import mapboxgl from 'mapbox-gl';
+import { useState, useCallback, useRef } from 'react';
+import type mapboxgl from 'mapbox-gl';
 import { Post } from '@/lib/types';
 import { getPosts } from '@/lib/api';
 
 export function useMap() {
   const [map, setMapState] = useState<mapboxgl.Map | null>(null);
   const [posts, setPostsState] = useState<Post[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const postsRef = useRef<Post[]>([]);
 
   const setMap = useCallback((mapInstance: mapboxgl.Map | null) => {
@@ -29,27 +29,44 @@ export function useMap() {
   }, []);
 
   const loadPosts = useCallback(async () => {
+    // Instant cache hydrate (subsequent visits)
     try {
-      // Get KleoPosts and convert them to Posts for compatibility
+      if (typeof window !== 'undefined') {
+        const raw = sessionStorage.getItem('kleo_posts_cache');
+        if (raw) {
+          const cached = JSON.parse(raw) as { posts: Post[]; ts: number };
+          if (Array.isArray(cached.posts)) {
+            setPosts(cached.posts);
+          }
+        }
+      }
+    } catch {}
+
+    setIsLoading(true);
+    try {
       const kleoPosts = await getPosts();
       const convertedPosts: Post[] = kleoPosts.map(kleoPost => ({
         id: kleoPost.id,
-        user_id: kleoPost.contributor_id || 'anonymous',
-        type: kleoPost.media_type || 'text',
-        content: kleoPost.text,
+        user_id: kleoPost.user_id || 'anonymous',
+        type: kleoPost.type === 'video' ? 'video' : 'text',
+        content: kleoPost.content,
         lat: kleoPost.lat,
         lng: kleoPost.lng,
-        media_url: kleoPost.ipfs_url,
-        ipfs_post_url: kleoPost.ipfs_url,
-        far_score: 0,
-        engagement_score: 0,
-        flags: 0,
+        media_url: kleoPost.media_url || kleoPost.ipfs_metadata_url,
+        ipfs_post_url: kleoPost.ipfs_metadata_url,
+        far_score: kleoPost.far_score || 0,
+        engagement_score: kleoPost.engagement_score || 0,
+        flags: kleoPost.flags || 0,
         created_at: kleoPost.created_at,
         updated_at: kleoPost.created_at,
-        tags: kleoPost.tags,
-        contributor_id: kleoPost.contributor_id
+        tags: [],
       }));
       setPosts(convertedPosts);
+      try {
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('kleo_posts_cache', JSON.stringify({ posts: convertedPosts, ts: Date.now() }));
+        }
+      } catch {}
     } catch (error) {
       console.error('Error loading posts:', error);
     } finally {
@@ -57,108 +74,12 @@ export function useMap() {
     }
   }, [setPosts]);
 
-  const addPostsToMap = useCallback((mapInstance: mapboxgl.Map) => {
-    postsRef.current.forEach((post) => {
-      if (post.lat && post.lng) {
-        // Create marker element with Kleo theme
-        const markerEl = document.createElement('div');
-        markerEl.className = 'w-6 h-6 bg-gradient-to-br from-gold to-yellow-400 rounded-full border-2 border-white shadow-lg cursor-pointer';
-        markerEl.style.transform = 'translate(-50%, -100%)';
-
-        // Create popup with enhanced content
-        const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
-          <div class="p-4 max-w-xs">
-            <div class="flex items-center space-x-2 mb-2">
-              <div class="w-6 h-6 bg-gradient-to-br from-gold to-yellow-400 rounded-full flex items-center justify-center">
-                <span class="text-gray-900 font-bold text-xs">K</span>
-              </div>
-              <div>
-                <p class="text-sm font-medium text-gray-900">${post.contributor_id || 'Anonymous'}</p>
-                <p class="text-xs text-gray-500">${new Date(post.created_at || '').toLocaleDateString()}</p>
-              </div>
-            </div>
-            <p class="text-gray-900 mb-3">${post.content}</p>
-            ${post.media_url ? `
-              <div class="mt-3">
-                ${post.type === 'audio' ? 
-                  `<audio controls class="w-full"><source src="${post.media_url}" type="audio/mpeg"></audio>` :
-                  post.type === 'video' ?
-                  `<video controls class="w-full"><source src="${post.media_url}" type="video/mp4"></video>` :
-                  post.type === 'image' ?
-                  `<img src="${post.media_url}" alt="Story media" class="w-full rounded">` :
-                  ''
-                }
-              </div>
-            ` : ''}
-          </div>
-        `);
-
-        // Add marker to map
-        new mapboxgl.Marker(markerEl)
-          .setLngLat([post.lng, post.lat])
-          .setPopup(popup)
-          .addTo(mapInstance);
-      }
-    });
-  }, []);
-
-  const addNewPostToMap = useCallback((newPost: Post, mapInstance: mapboxgl.Map) => {
-    if (newPost.lat && newPost.lng) {
-      const markerEl = document.createElement('div');
-      markerEl.className = 'w-6 h-6 bg-gradient-to-br from-gold to-yellow-400 rounded-full border-2 border-white shadow-lg cursor-pointer animate-pulse';
-      markerEl.style.transform = 'translate(-50%, -100%)';
-
-      const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
-        <div class="p-4 max-w-xs">
-          <div class="flex items-center space-x-2 mb-2">
-            <div class="w-6 h-6 bg-gradient-to-br from-gold to-yellow-400 rounded-full flex items-center justify-center">
-              <span class="text-gray-900 font-bold text-xs">K</span>
-            </div>
-            <div>
-              <p class="text-sm font-medium text-gray-900">${newPost.contributor_id || 'Anonymous'}</p>
-              <p class="text-xs text-gray-500">${new Date(newPost.created_at || '').toLocaleDateString()}</p>
-            </div>
-          </div>
-          <p class="text-gray-900 mb-3">${newPost.content}</p>
-          ${newPost.media_url ? `
-            <div class="mt-3">
-              ${newPost.type === 'audio' ? 
-                `<audio controls class="w-full"><source src="${newPost.media_url}" type="audio/mpeg"></audio>` :
-                newPost.type === 'video' ?
-                `<video controls class="w-full"><source src="${newPost.media_url}" type="video/mp4"></video>` :
-                newPost.type === 'image' ?
-                `<img src="${newPost.media_url}" alt="Story media" class="w-full rounded">` :
-                ''
-              }
-            </div>
-          ` : ''}
-        </div>
-      `);
-
-      new mapboxgl.Marker(markerEl)
-        .setLngLat([newPost.lng, newPost.lat])
-        .setPopup(popup)
-        .addTo(mapInstance);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadPosts();
-  }, [loadPosts]);
-
-  useEffect(() => {
-    if (map && posts.length > 0) {
-      addPostsToMap(map);
-    }
-  }, [map, posts.length, addPostsToMap]);
-
   return {
     map,
     setMap,
     posts,
     setPosts,
     isLoading,
-    addNewPostToMap,
     loadPosts,
   };
 } 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Coins, ExternalLink, Image, Video, Link as LinkIcon, MessageSquare } from 'lucide-react';
+import { Coins, ExternalLink, Video, Link as LinkIcon, MessageSquare } from 'lucide-react';
 import { graphClient, GraphQLNFT } from '@/lib/graph-client';
 
 interface NFTGalleryProps {
@@ -45,7 +45,7 @@ export default function NFTGallery({ walletAddress }: NFTGalleryProps) {
   const getNFTIcon = (metadata: string) => {
     try {
       const parsed = JSON.parse(metadata);
-      const mediaType = parsed.attributes?.find((attr: any) => attr.trait_type === 'Media Type')?.value;
+      const mediaType = parsed.attributes?.find((attr: { trait_type?: string; value?: string }) => attr.trait_type === 'Media Type')?.value;
       
       switch (mediaType) {
         case 'video':

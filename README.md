@@ -21,7 +21,7 @@ Kleo is a decentralized storytelling platform that allows users to share stories
 - **Frontend**: Next.js 15, React 19, TypeScript
 - **Styling**: TailwindCSS 4
 - **Map**: Mapbox GL JS 3.14
-- **Storage**: IPFS via Web3.Storage (completely decentralized)
+- **Storage**: IPFS via Pinata (decentralized content addressing)
 - **Blockchain**: XRPL for rewards + Ripple EVM for NFTs
 - **Authentication**: Dynamic.xyz for secure wallet authentication
 - **AI**: OpenAI for news summarization and fake news detection
@@ -33,7 +33,7 @@ Kleo is a decentralized storytelling platform that allows users to share stories
 - Node.js 18+ 
 - npm or yarn
 - Mapbox account
-- NFT.Storage account
+- Pinata account
 - Dynamic.xyz account (for authentication)
 
 ### Installation
@@ -59,8 +59,8 @@ Kleo is a decentralized storytelling platform that allows users to share stories
    # Mapbox
    NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_access_token
    
-   # IPFS (NFT.Storage)
-   NEXT_PUBLIC_NFT_STORAGE_TOKEN=your_nft_storage_token
+   # IPFS (Pinata)
+   PINATA_JWT=your_pinata_jwt
    
    # XRPL Network (optional, defaults to testnet)
    NEXT_PUBLIC_XRPL_NETWORK=testnet
@@ -84,10 +84,8 @@ Create a `.env.local` file in the root directory with the following variables:
 NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_access_token_here
 
 # IPFS Storage (Required)
-NEXT_PUBLIC_NFT_STORAGE_TOKEN=your_nft_storage_token_here
-
-# Web3.Storage (Required - for enhanced IPFS integration)
-NEXT_PUBLIC_WEB3_STORAGE_TOKEN=your_web3_storage_token_here
+# All uploads go through server-side route using this JWT (do not expose to client)
+PINATA_JWT=your_pinata_jwt_here
 
 # Dynamic.xyz (Required)
 NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID=your_dynamic_environment_id_here
@@ -105,8 +103,7 @@ NEXT_PUBLIC_GRAPH_ENDPOINT=your_subgraph_graphql_endpoint_here
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | ✅ | Mapbox access token for map functionality |
-| `NEXT_PUBLIC_NFT_STORAGE_TOKEN` | ✅ | NFT.Storage token for IPFS file uploads |
-| `NEXT_PUBLIC_WEB3_STORAGE_TOKEN` | ✅ | Web3.Storage token for enhanced IPFS integration and Graph database |
+| `PINATA_JWT` | ✅ | Server-side JWT for Pinata uploads |
 | `NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID` | ✅ | Dynamic.xyz environment ID for wallet authentication |
 | `NEXT_PUBLIC_OPENAI_API_KEY` | ❌ | OpenAI API key for AI-powered article summarization |
 | `NEXT_PUBLIC_NFT_CONTRACT_ADDRESS` | ✅ | Deployed KleoNFT contract address on Ripple EVM |
@@ -158,7 +155,7 @@ NEXT_PUBLIC_NFT_CONTRACT_ADDRESS=your_deployed_contract_address
 - **AI-Powered Fake News Detection** - Verify article credibility before posting
 - **Mercury Parser Integration** - Advanced article content extraction
 - **OpenAI Integration** - Real AI summaries for news articles
-- **Web3.Storage Integration** - Enhanced IPFS storage with Graph database
+- **Pinata Integration** - IPFS storage with Graph database metadata tracked in-memory
 - **Graph Database Analytics** - Advanced relationship mapping and analytics
 - **Rate Limiting** - 1 post per 5 minutes per wallet
 - **Reward System** - Earn XP for contributions
@@ -181,7 +178,7 @@ NEXT_PUBLIC_NFT_CONTRACT_ADDRESS=your_deployed_contract_address
 ## Architecture
 
 ### Decentralized Storage
-- **IPFS**: All data stored on IPFS via NFT.Storage
+- **IPFS**: All data stored on IPFS via Pinata
 - **Global State**: Centralized index of users and posts on IPFS
 - **User Profiles**: Individual user data stored as IPFS objects
 - **Posts**: Each post stored as separate IPFS object with metadata

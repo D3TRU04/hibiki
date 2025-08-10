@@ -50,7 +50,7 @@ export interface KleoPost {
 export interface Post {
   id?: string;
   user_id: string;
-  type: 'text' | 'audio' | 'video' | 'image';
+  type: 'text' | 'video';
   content: string;
   lat: number;
   lng: number;
@@ -110,9 +110,7 @@ export interface RateLimitInfo {
 
 export interface UploadFormData {
   text: string;
-  audioFile?: File;
   videoFile?: File;
-  imageFile?: File; // Added for Sprint 2
   honeypot?: string;
   tags?: string[]; // Added for Sprint 2
   contributor_id?: string; // Added for Sprint 2
@@ -133,7 +131,7 @@ export interface IPFSMetadata {
   timestamp: string;
   user_id: string;
   media_url?: string;
-  type: 'text' | 'audio' | 'video' | 'image';
+  type: 'text' | 'video';
   far_score: number;
   engagement_score: number;
 }

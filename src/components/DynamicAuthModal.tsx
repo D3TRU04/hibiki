@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { DynamicConnectButton } from '@dynamic-labs/sdk-react';
+import { useDynamicContext } from '@dynamic-labs/sdk-react';
 import { useDynamicWallet } from '@/hooks/useDynamicWallet';
-import { X, User, LogOut, Wallet, Coins, Trophy, Sparkles } from 'lucide-react';
+import { X, User, LogOut, Wallet, Sparkles } from 'lucide-react';
 import { getWalletDisplayName, getWalletTypeDisplay } from '@/lib/identity';
 
 interface DynamicAuthModalProps {
@@ -13,7 +13,96 @@ interface DynamicAuthModalProps {
 
 export default function DynamicAuthModal({ isOpen, onClose }: DynamicAuthModalProps) {
   const { wallet, isLoading, isConnected, disconnect, user } = useDynamicWallet();
+  const { setShowAuthFlow } = (useDynamicContext() as unknown as { setShowAuthFlow?: (show: boolean) => void });
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const openDynamicAuth = async () => {
+    try {
+      // Force re-open even if previously opened by toggling off then on, with a short delay
+      setShowAuthFlow?.(false);
+      await sleep(120);
+      setShowAuthFlow?.(true);
+    } catch {}
+  };
   const [showDetails, setShowDetails] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const envChainId = (process.env.NEXT_PUBLIC_EVM_CHAIN_ID || '1440002').trim();
+  const toHex = (id: string) => id.startsWith('0x') ? id.toLowerCase() : `0x${parseInt(id, 10).toString(16)}`;
+  const expectedChainHex = toHex(envChainId);
+  const expectedChainName = process.env.NEXT_PUBLIC_EVM_CHAIN_NAME;
+  const expectedRpcUrl = process.env.NEXT_PUBLIC_EVM_RPC_URL;
+  const expectedCurrency = process.env.NEXT_PUBLIC_EVM_CURRENCY;
+  const expectedBlockExplorer = process.env.NEXT_PUBLIC_EVM_BLOCK_EXPLORER_URL;
+
+  const needsNetworkSwitch = (() => {
+    if (typeof window === 'undefined' || !(window as any).ethereum) return false;
+    try { const current = (window as any).ethereum.chainId?.toLowerCase(); return !!current && current !== expectedChainHex; } catch { return false; }
+  })();
+
+  async function directConnectXRPL() {
+    try {
+      // Always reveal Dynamic's auth flow alongside direct connect
+      await openDynamicAuth();
+      const eth = (window as any).ethereum;
+      if (!eth) {
+        // Try to open MetaMask install page
+        window.open('https://metamask.io/download/', '_blank');
+        setConnectError('MetaMask not detected. Please install MetaMask and reload.');
+        return;
+      }
+      if (!expectedChainName || !expectedRpcUrl || !expectedCurrency) {
+        setConnectError('Missing network env: EVM_CHAIN_NAME / EVM_RPC_URL / EVM_CURRENCY');
+        return;
+      }
+      // Always try adding the chain first (handles both unknown/known cases gracefully)
+      const addParams: any = {
+        chainId: expectedChainHex,
+        chainName: expectedChainName,
+        rpcUrls: [expectedRpcUrl],
+        nativeCurrency: { name: expectedCurrency, symbol: expectedCurrency, decimals: 18 },
+      };
+      if (expectedBlockExplorer) addParams.blockExplorerUrls = [expectedBlockExplorer];
+      try { await eth.request({ method: 'wallet_addEthereumChain', params: [addParams] }); } catch (e) { /* ignore if already added */ }
+      // Ensure switch
+      await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: expectedChainHex }] });
+      // Request accounts
+      const accounts: string[] = await eth.request({ method: 'eth_requestAccounts' });
+      if (accounts && accounts[0]) {
+        // Minimal local wallet state for UI continuity
+        (window as any).local_xrpl_wallet = { address: accounts[0], type: 'EVM', isConnected: true };
+        onClose();
+        setConnectError(null);
+      }
+    } catch (err: any) {
+      // Surface error for visibility and fall back to Dynamic
+      const msg = typeof err?.message === 'string' ? err.message : 'Failed to connect. Please check MetaMask popup.';
+      setConnectError(msg);
+      openDynamicAuth();
+    }
+  }
+
+  async function switchNetwork() {
+    try {
+      const eth = (window as any).ethereum;
+      if (!eth) return;
+      await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: expectedChainHex }] });
+    } catch (err: any) {
+      // 4902: unknown chain; try adding then switching
+      if (err?.code === 4902 && expectedRpcUrl) {
+        try {
+          await (window as any).ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: expectedChainHex,
+              chainName: expectedChainName,
+              rpcUrls: [expectedRpcUrl],
+              nativeCurrency: { name: expectedCurrency, symbol: expectedCurrency, decimals: 18 },
+            }],
+          });
+          await (window as any).ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: expectedChainHex }] });
+        } catch {}
+      }
+    }
+  }
 
   if (!isOpen) return null;
 
@@ -50,6 +139,13 @@ export default function DynamicAuthModal({ isOpen, onClose }: DynamicAuthModalPr
           </div>
 
           <div className="p-6 space-y-4">
+            {needsNetworkSwitch && (
+              <div className="p-3 rounded-lg border border-yellow-300 bg-yellow-50 text-yellow-900 text-sm">
+                <div className="mb-2 font-medium">Wrong network</div>
+                <p className="mb-3">Your wallet is not on a supported network. Switch to <b>{expectedChainName}</b> to continue.</p>
+                <button onClick={switchNetwork} className="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-2 px-4 rounded">Switch network</button>
+              </div>
+            )}
             {/* User Info */}
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gold rounded-full flex items-center justify-center">
@@ -158,74 +254,22 @@ export default function DynamicAuthModal({ isOpen, onClose }: DynamicAuthModalPr
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* Header */}
-          <div className="text-center">
-            <div className="w-16 h-16 bg-gold rounded-full flex items-center justify-center mx-auto mb-4">
-              <Wallet className="w-8 h-8 text-white" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Connect Your Wallet
-            </h3>
-            <p className="text-sm text-gray-600">
-              Connect your wallet to share stories, earn rewards, and track your contributions on Kleo.
-            </p>
-          </div>
-
-          {/* Supported Wallets */}
-          <div className="space-y-3">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="font-medium text-blue-900 mb-2">Supported Wallets</h4>
-              <div className="space-y-2 text-sm text-blue-800">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span>MetaMask (Ethereum)</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span>WalletConnect (Multi-chain)</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span>Coinbase Wallet (Ethereum)</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span>XRPL Wallets (via fallback)</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Connect Button */}
-          <div className="space-y-3">
-            <DynamicConnectButton />
-            
-            <div className="text-center">
-              <p className="text-xs text-gray-500">
-                By connecting your wallet, you agree to our terms of service and privacy policy.
-              </p>
-            </div>
-          </div>
-
-          {/* Benefits */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 mb-3">Benefits of Connecting</h4>
-            <div className="space-y-2 text-sm text-gray-600">
-              <div className="flex items-center space-x-2">
-                <Trophy className="w-4 h-4 text-gold" />
-                <span>Earn XP and rewards for your contributions</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Coins className="w-4 h-4 text-gold" />
-                <span>Claim RLUSD tokens for your stories</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Sparkles className="w-4 h-4 text-gold" />
-                <span>Track your contribution history</span>
-              </div>
-            </div>
-          </div>
+        <div className="p-6 space-y-3">
+          <button
+            onClick={() => void openDynamicAuth()}
+            className="w-full bg-gold hover:bg-yellow-500 text-gray-900 font-medium py-2 px-4 rounded-lg transition-colors"
+          >
+            Connect wallet
+          </button>
+          <button
+            onClick={() => void directConnectXRPL()}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+          >
+            Connect with MetaMask (XRPL EVM)
+          </button>
+          {connectError && (
+            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">{connectError}</div>
+          )}
         </div>
       </div>
     </div>

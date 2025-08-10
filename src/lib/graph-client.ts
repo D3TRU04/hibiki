@@ -95,7 +95,8 @@ export class GraphClient {
 
     try {
       const response = await this.executeQuery(query, { first, skip });
-      return response.data.postSubmitteds || [];
+      const items = (response.data as unknown as { postSubmitteds?: GraphQLPost[] }).postSubmitteds;
+      return Array.isArray(items) ? items : [];
     } catch (error) {
       console.error('Error fetching posts from subgraph:', error);
       return [];
@@ -131,7 +132,8 @@ export class GraphClient {
 
     try {
       const response = await this.executeQuery(query, { mediaType, first });
-      return response.data.postSubmitteds || [];
+      const items = (response.data as unknown as { postSubmitteds?: GraphQLPost[] }).postSubmitteds;
+      return Array.isArray(items) ? items : [];
     } catch (error) {
       console.error('Error fetching posts by media type:', error);
       return [];
@@ -166,7 +168,8 @@ export class GraphClient {
 
     try {
       const response = await this.executeQuery(query, { wallet });
-      return response.data.postSubmitteds || [];
+      const items = (response.data as unknown as { postSubmitteds?: GraphQLPost[] }).postSubmitteds;
+      return Array.isArray(items) ? items : [];
     } catch (error) {
       console.error('Error fetching posts by wallet:', error);
       return [];
@@ -195,7 +198,8 @@ export class GraphClient {
 
     try {
       const response = await this.executeQuery(query, { wallet });
-      return response.data.nftMinteds || [];
+      const items = (response.data as unknown as { nftMinteds?: GraphQLNFT[] }).nftMinteds;
+      return Array.isArray(items) ? items : [];
     } catch (error) {
       console.error('Error fetching NFTs by wallet:', error);
       return [];
@@ -223,7 +227,8 @@ export class GraphClient {
 
     try {
       const response = await this.executeQuery(query, { wallet });
-      return response.data.rewardClaimeds || [];
+      const items = (response.data as unknown as { rewardClaimeds?: GraphQLReward[] }).rewardClaimeds;
+      return Array.isArray(items) ? items : [];
     } catch (error) {
       console.error('Error fetching rewards by wallet:', error);
       return [];
@@ -248,7 +253,8 @@ export class GraphClient {
 
     try {
       const response = await this.executeQuery(query, { wallet });
-      return response.data.user || null;
+      const item = (response.data as unknown as { user?: GraphQLUser }).user;
+      return (item ?? null);
     } catch (error) {
       console.error('Error fetching user profile:', error);
       return null;
@@ -273,7 +279,8 @@ export class GraphClient {
 
     try {
       const response = await this.executeQuery(query);
-      return response.data.globalStats || null;
+      const item = (response.data as unknown as { globalStats?: GraphQLGlobalStats }).globalStats;
+      return (item ?? null);
     } catch (error) {
       console.error('Error fetching global stats:', error);
       return null;
@@ -300,7 +307,8 @@ export class GraphClient {
 
     try {
       const response = await this.executeQuery(query, { searchTerm, first });
-      return response.data.postSearchs || [];
+      const items = (response.data as unknown as { postSearchs?: GraphQLPost[] }).postSearchs;
+      return Array.isArray(items) ? items : [];
     } catch (error) {
       console.error('Error searching posts:', error);
       return [];
@@ -329,14 +337,15 @@ export class GraphClient {
 
     try {
       const response = await this.executeQuery(query, { first });
-      return response.data.users || [];
+      const items = (response.data as unknown as { users?: GraphQLUser[] }).users;
+      return Array.isArray(items) ? items : [];
     } catch (error) {
       console.error('Error fetching leaderboard:', error);
       return [];
     }
   }
 
-  private async executeQuery(query: string, variables: any = {}): Promise<any> {
+  private async executeQuery(query: string, variables: Record<string, unknown> = {}): Promise<{ data: { users?: unknown[]; [k: string]: unknown }; errors?: unknown }> {
     const response = await fetch(GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -352,13 +361,13 @@ export class GraphClient {
       throw new Error(`GraphQL request failed: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data: { data: { [k: string]: unknown }; errors?: unknown } = await response.json();
     
     if (data.errors) {
       throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
     }
 
-    return data;
+    return data as { data: { users?: unknown[]; [k: string]: unknown }; errors?: unknown };
   }
 }
 

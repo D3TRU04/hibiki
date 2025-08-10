@@ -1,9 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { User, List, Wallet, LogOut, UserCheck } from 'lucide-react';
-import { useDynamicWallet } from '@/hooks/useDynamicWallet';
-import { getWalletDisplayName } from '@/lib/identity';
+// icons intentionally omitted
 
 interface NavbarDesktopProps {
   onAddStory?: () => void;
@@ -14,17 +12,12 @@ interface NavbarDesktopProps {
 }
 
 export default function NavbarDesktop({
-  onAddStory,
-  onAuthClick,
-  onToggleFeed,
-  onToggleUserPanel,
-  isAuthenticated = false
+  onAddStory: _onAddStory,
+  onAuthClick: _onAuthClick,
+  onToggleFeed: _onToggleFeed,
+  onToggleUserPanel: _onToggleUserPanel,
+  isAuthenticated: _isAuthenticated
 }: NavbarDesktopProps) {
-  const { wallet, disconnect } = useDynamicWallet();
-
-  const handleDisconnect = () => {
-    disconnect();
-  };
 
   return (
     <div className="hidden md:flex items-center space-x-8">
