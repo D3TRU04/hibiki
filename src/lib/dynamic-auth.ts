@@ -4,23 +4,24 @@ import { DynamicContextProvider, useDynamicContext, DynamicWidget } from '@dynam
 import { EthereumWalletConnectors } from '@dynamic-labs/ethereum';
 import { Wallet } from './types';
 
+// EVM Network configuration for XRPL EVM Sidechain
+const EVM_NETWORK_CONFIG = {
+  chainId: process.env.NEXT_PUBLIC_EVM_CHAIN_ID || '1449000',
+  chainName: process.env.NEXT_PUBLIC_EVM_CHAIN_NAME || 'XRPL EVM Sidechain Testnet',
+  rpcUrl: process.env.NEXT_PUBLIC_EVM_RPC_URL || 'https://rpc.testnet.xrplevm.org/',
+  currency: process.env.NEXT_PUBLIC_EVM_CURRENCY || 'XRP',
+  blockExplorer: process.env.NEXT_PUBLIC_EVM_BLOCK_EXPLORER_URL || 'https://explorer.testnet.xrplevm.org/',
+};
+
 // Dynamic.xyz configuration
 const DYNAMIC_CONFIG = {
   environmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID || 'demo',
-  walletConnectors: [EthereumWalletConnectors],
   settings: {
     walletList: ['metamask', 'walletconnect', 'coinbase'],
-    eventsCallbacks: {
-      onAuthSuccess: (args: unknown) => {
-        console.log('Dynamic auth success:', args);
-      },
-      onAuthError: (args: unknown) => {
-        console.error('Dynamic auth error:', args);
-      },
-      onLogout: () => {
-        console.log('Dynamic logout');
-      },
-    },
+    defaultChain: EVM_NETWORK_CONFIG.chainId,
+    network: EVM_NETWORK_CONFIG.chainId,
+    multiWallet: true,
+    enableNetworkSwitching: true,
   },
 };
 

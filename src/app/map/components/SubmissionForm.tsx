@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { X, Upload, MapPin, Send, Video, Star, AlertCircle, Link, Clock, Shield, AlertTriangle, Coins } from 'lucide-react';
+import { X, Upload, MapPin, Send, Video, Star, AlertCircle, Link, Clock, Shield, AlertTriangle, Coins, Search } from 'lucide-react';
 import { KleoPost, Wallet } from '@/lib/types';
-import { createKleoPost } from '@/lib/api';
-import { rateLimiterService } from '@/lib/rate-limiter';
-import { fakeNewsDetectorService } from '@/lib/fake-news-detector';
+import { createKleoPost } from '@/lib/api/api';
+import { nftContractService } from '@/lib/wallet/nft-contract';
+import { useDynamicContext } from '@dynamic-labs/sdk-react';
+import { ethers } from 'ethers';
+import { rateLimiterService } from '@/lib/rewards/rate-limiter';
+import { fakeNewsDetectorService } from '@/lib/detector/fake-news-detector';
 
 interface SubmissionFormProps {
   isOpen: boolean;
@@ -36,6 +39,12 @@ export default function SubmissionForm({ isOpen, onClose, lat, lng, onPostCreate
   const [credibilityInfo, setCredibilityInfo] = useState<{ score: number; isReliable: boolean; reasons: string[] } | null>(null);
   const [isCheckingCredibility, setIsCheckingCredibility] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [locationQuery, setLocationQuery] = useState<string>('');
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodeError, setGeocodeError] = useState<string | null>(null);
+  const [geocodeName, setGeocodeName] = useState<string | null>(null);
+  const dynamicCtx = useDynamicContext() as unknown as { sdk?: any; primaryWallet?: { address: string } };
+  const ENABLE_NFT_MINT = process.env.NEXT_PUBLIC_ENABLE_NFT_MINT === '1';
 
   const isAuthenticated = wallet && wallet.isConnected;
 
@@ -95,6 +104,31 @@ export default function SubmissionForm({ isOpen, onClose, lat, lng, onPostCreate
     return n;
   };
 
+  const geocodeLocation = async () => {
+    try {
+      setIsGeocoding(true);
+      setGeocodeError(null);
+      setGeocodeName(null);
+      const token = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+      const q = locationQuery?.trim();
+      if (!token) { setGeocodeError('Missing Mapbox token'); return; }
+      if (!q) { setGeocodeError('Enter a city, area, or address'); return; }
+      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${token}&limit=1`;
+      const resp = await fetch(url);
+      if (!resp.ok) { setGeocodeError('Geocoding failed'); return; }
+      const data = await resp.json();
+      const feat = Array.isArray(data?.features) ? data.features[0] : null;
+      if (!feat || !Array.isArray(feat.center) || feat.center.length < 2) { setGeocodeError('No results found'); return; }
+      const [lng, lat] = feat.center as [number, number];
+      setFormData(prev => ({ ...prev, manualLat: String(lat), manualLng: String(lng) }));
+      setGeocodeName(typeof feat.place_name === 'string' ? feat.place_name : `${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+    } catch {
+      setGeocodeError('Unable to resolve location');
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
   const checkNewsCredibility = async (url: string) => {
     setIsCheckingCredibility(true);
     try {
@@ -136,7 +170,24 @@ export default function SubmissionForm({ isOpen, onClose, lat, lng, onPostCreate
         if (post.far_score && post.far_score > 0) { setEarnedPoints(post.far_score); }
         type MaybeCid = { post_cid?: string };
         const cid = (post as unknown as MaybeCid).post_cid || post.ipfs_metadata_url?.replace('ipfs://', '');
-        if (cid) { setNftMinted({ tokenId: cid, transactionHash: 'NFT minted successfully' }); }
+        // Attempt NFT mint if enabled, user has email, and we can get a signer
+        if (ENABLE_NFT_MINT) {
+          try {
+            const email = (dynamicCtx as any)?.user?.email;
+            if (email && wallet?.address) {
+              const eth = (window as any).ethereum;
+              if (eth) {
+                const provider = new ethers.BrowserProvider(eth as any);
+                const signer = await provider.getSigner();
+                const result = await nftContractService.mintNFT(post as unknown as import('@/lib/types').KleoPost, wallet.address, signer as unknown as ethers.Signer, email);
+                if (result.success) {
+                  setNftMinted({ tokenId: result.tokenId, transactionHash: result.transactionHash });
+                }
+              }
+            }
+          } catch {}
+        }
+        if (cid && !nftMinted) { setNftMinted({ tokenId: cid, transactionHash: 'NFT metadata pinned' }); }
         setTimeout(() => { setEarnedPoints(null); setNftMinted(null); handleClose(); }, 5000);
         onPostCreated(post);
       } else { setError('Failed to create post. Please try again.'); }
@@ -221,11 +272,38 @@ export default function SubmissionForm({ isOpen, onClose, lat, lng, onPostCreate
               <MapPin className="w-4 h-4 text-blue-500" />
               <span className="text-sm text-blue-700">Location</span>
             </div>
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-gray-700 mb-2">City or area</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g., San Francisco, CA"
+                  value={locationQuery}
+                  onChange={(e) => { setLocationQuery(e.target.value); setGeocodeError(null); }}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold focus:border-transparent"
+                />
+                <button
+                  type="button"
+                  onClick={() => void geocodeLocation()}
+                  disabled={isGeocoding || !locationQuery.trim()}
+                  className="px-3 py-2 bg-gray-800 text-white rounded-lg disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isGeocoding ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Search className="w-4 h-4" />}
+                  <span>Search</span>
+                </button>
+              </div>
+              {geocodeName && (
+                <p className="text-xs text-green-700 mt-2">Location found: {geocodeName}</p>
+              )}
+              {geocodeError && (
+                <p className="text-xs text-red-700 mt-2">{geocodeError}</p>
+              )}
+            </div>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <input type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*" placeholder="Latitude" value={formData.manualLat || ''} onChange={handleManualLatChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold focus:border-transparent" />
               <input type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*" placeholder="Longitude" value={formData.manualLng || ''} onChange={handleManualLngChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold focus:border-transparent" />
             </div>
-            <p className="text-xs text-gray-500 mt-1">Enter coordinates for where this happened.</p>
+            <p className="text-xs text-gray-500 mt-1">Enter coordinates or search by city/area to auto-fill.</p>
           </div>
           <div className="mb-6">
             <label className="block text.sm font-medium text-gray-700 mb-3">Content Type *</label>

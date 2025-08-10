@@ -1,18 +1,20 @@
 'use client';
 
-import { Trophy, Coins } from 'lucide-react';
-import { useDynamicWallet } from '@/hooks/useDynamicWallet';
-import { getUserXP } from '@/lib/rewards';
+import { useState, useEffect } from 'react';
+import { useDynamicContext } from '@dynamic-labs/sdk-react';
+import { Trophy, Coins, TrendingUp } from 'lucide-react';
+import { getUserXP } from '@/lib/rewards/rewards';
 
 function getLevelTitle(_: number): string { return 'Level'; }
 function getClaimableRLUSD(_: string): number { return 0; }
 
 export default function UserPanelRewards() {
-  const { wallet, isConnected } = useDynamicWallet();
+  const { primaryWallet, user } = useDynamicContext();
+  const isLoggedIn = !!(primaryWallet && user);
 
   const normalizedXP = (() => {
-    if (wallet && isConnected) {
-      const base = getUserXP(wallet.address);
+    if (primaryWallet && isLoggedIn) {
+      const base = getUserXP(primaryWallet.address);
       const level = Math.max(1, Math.floor(base.totalXP / 100) + 1);
       return { totalXP: base.totalXP, posts: base.posts, level };
     }
@@ -20,8 +22,8 @@ export default function UserPanelRewards() {
   })();
   const userXP: { totalXP: number; level: number; posts: number } = normalizedXP;
 
-  const claimableRLUSD = wallet && isConnected 
-    ? getClaimableRLUSD(wallet.address)
+  const claimableRLUSD = primaryWallet && isLoggedIn 
+    ? getClaimableRLUSD(primaryWallet.address)
     : 0;
 
   const handleClaimRLUSD = () => {
@@ -76,4 +78,4 @@ export default function UserPanelRewards() {
       </div>
     </>
   );
-} 
+}

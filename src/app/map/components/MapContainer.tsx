@@ -3,8 +3,9 @@
 import { useEffect, useRef } from 'react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type mapboxgl from 'mapbox-gl';
+import { aiSummaryService } from '@/lib/ai/ai-summary';
 import type { Geometry as GeoJSONGeometry, Point as GeoJSONPoint } from 'geojson';
-import type { Map, GeoJSONSource } from 'mapbox-gl';
+import type { GeoJSONSource } from 'mapbox-gl';
 import { KleoPost } from '@/lib/types';
 
 let mapboxPrewarmed = false;
@@ -26,13 +27,24 @@ interface MapContainerProps {
   posts: KleoPost[];
   onMapClick: (lat: number, lng: number) => void;
   onPostClick?: (post: KleoPost) => void;
-  onMapReady?: (map: Map) => void;
+  onMapReady?: (map: mapboxgl.Map) => void;
 }
 
 export default function MapContainer({ onMapClick, onMapReady, posts = [] }: MapContainerProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<Map | null>(null);
+  const mapRef = useRef<mapboxgl.Map | null>(null);
   const sourceId = 'posts-source';
+  const popupRef = useRef<mapboxgl.Popup | null>(null);
+  const summaryCacheRef = useRef<Map<string, { summary: string; videos: string[] }>>(new Map());
+  const postsRef = useRef<KleoPost[]>(posts);
+
+  useEffect(() => { postsRef.current = posts; }, [posts]);
+
+  const ipfsToGateway = (url?: string) => {
+    if (!url) return undefined;
+    if (url.startsWith('ipfs://')) return `https://ipfs.io/ipfs/${url.replace('ipfs://', '')}`;
+    return url;
+  };
 
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
@@ -46,14 +58,14 @@ export default function MapContainer({ onMapClick, onMapReady, posts = [] }: Map
       mapboxgl.accessToken = accessToken;
       if (!mapboxPrewarmed) { try { mapboxgl.prewarm(); } catch {} mapboxPrewarmed = true; }
 
-      const styleOption: any = process.env.NEXT_PUBLIC_MAPBOX_FAST_MINIMAL === '1' ? MINIMAL_STYLE : 'mapbox://styles/mapbox/satellite-streets-v12';
+      const styleOption: any = process.env.NEXT_PUBLIC_MAPBOX_FAST_MINIMAL === '1' ? MINIMAL_STYLE : 'mapbox://styles/mapbox/light-v11';
 
       const map = new mapboxgl.Map({
         container: mapContainer.current!,
         style: styleOption,
         center: [0, 0],
         zoom: 2,
-        pitch: 30,
+        pitch: 5,
         bearing: 0,
         antialias: false,
         attributionControl: false,
@@ -69,31 +81,18 @@ export default function MapContainer({ onMapClick, onMapReady, posts = [] }: Map
         projection: { name: 'globe' } as any,
       } as mapboxgl.MapboxOptions);
 
-      mapRef.current = map as Map;
+      mapRef.current = map as mapboxgl.Map;
 
       map.on('load', () => {
         // If for any reason the style is empty, swap to default tiles
         try {
           const style = (map as any).getStyle();
           if (!style || !style.layers || style.layers.length === 0) {
-            (map as any).setStyle('mapbox://styles/mapbox/satellite-streets-v12');
+            (map as any).setStyle('mapbox://styles/mapbox/light-v11');
           }
         } catch {}
 
-        // Add DEM source for terrain and enable terrain for 3D relief
-        try {
-          if (!(map as any).getSource('mapbox-dem')) {
-            (map as any).addSource('mapbox-dem', {
-              type: 'raster-dem',
-              url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
-              tileSize: 512,
-              maxzoom: 14,
-            });
-          }
-          (map as any).setTerrain({ source: 'mapbox-dem', exaggeration: 1.2 });
-        } catch {}
-
-        // Add atmospheric sky for a more Earth-like appearance
+        // Terrain disabled for performance; sky layer remains for visual quality
         try {
           if (!(map as any).getLayer('sky')) {
             (map as any).addLayer({
@@ -157,21 +156,82 @@ export default function MapContainer({ onMapClick, onMapReady, posts = [] }: Map
           });
         });
 
-        map.on('click', 'unclustered-point', (e: mapboxgl.MapLayerMouseEvent) => {
+        // Hover-based AI summary popup
+        map.on('mouseenter', 'unclustered-point', async (e: mapboxgl.MapLayerMouseEvent) => {
           const feat = e.features?.[0] as mapboxgl.MapboxGeoJSONFeature | undefined;
           if (!feat) return;
           const geom = feat.geometry as GeoJSONGeometry;
           if (geom.type !== 'Point') return;
           const coords = (geom as GeoJSONPoint).coordinates as [number, number];
-          const props = feat.properties as Record<string, unknown>;
+          const [lng, lat] = coords;
+          const key = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+
+          // Close previous popup
+          try { if (popupRef.current) popupRef.current.remove(); } catch {}
+
+          // Show loading popup immediately
+          const loadingHtml = `
+            <div style="width:360px;max-width:360px;display:flex;gap:12px;">
+              <div style="flex:1;min-height:80px;color:#111827;font-size:12px;">
+                <div style="font-weight:600;margin-bottom:6px;">Summarizing nearby stories…</div>
+                <div class="w-4 h-4 border-2 border-gray-700 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+              <div style="width:140px;display:flex;align-items:center;justify-content:center;background:#f3f4f6;border-radius:6px;">
+                <span style="font-size:12px;color:#6b7280;">Loading media…</span>
+              </div>
+            </div>`;
+          const newPopup = new (map as any).Popup({ closeButton: true, closeOnClick: false });
+          newPopup.setLngLat(coords).setHTML(loadingHtml).addTo(map);
+          popupRef.current = newPopup as mapboxgl.Popup;
+
+          // Resolve nearby posts (match by rounded coords)
+          const nearby = postsRef.current.filter(p => {
+            try {
+              return p.lat != null && p.lng != null && p.lat.toFixed(4) === lat.toFixed(4) && p.lng.toFixed(4) === lng.toFixed(4);
+            } catch { return false; }
+          });
+
+          // Prepare videos list
+          const videos = nearby
+            .filter(p => p.type === 'video' || p.content_type === 'media' || !!p.media_url)
+            .map(p => ipfsToGateway(p.media_url || p.ipfs_post_url))
+            .filter(Boolean) as string[];
+
+          // Use cache or generate summary
+          let summary = summaryCacheRef.current.get(key)?.summary;
+          if (!summary) {
+            const newsText = nearby
+              .filter(p => (p.type !== 'video'))
+              .map(p => p.ai_summary || p.content)
+              .filter(Boolean)
+              .join('\n\n');
+            try {
+              const ai = await aiSummaryService.generateSummary({ mediaType: 'news', content: newsText || 'No news content provided.' });
+              summary = ai.summary;
+            } catch {
+              summary = 'Summary unavailable.';
+            }
+            summaryCacheRef.current.set(key, { summary, videos });
+          }
+
+          // Build popup HTML with summary left and videos right
+          const videosHtml = videos.length > 0
+            ? videos.slice(0, 3).map((v) => `<video src="${v || ''}" controls style="width:100%;height:80px;object-fit:cover;border-radius:6px;margin-bottom:6px;" preload="metadata"></video>`).join('')
+            : '<div style="font-size:12px;color:#6b7280;">No media</div>';
           const html = `
-            <div style="max-width:280px;">
-              <div style="font-weight:600;margin-bottom:4px;">${(props.contributor_id as string) || 'Anonymous'}</div>
-              ${props.ai_summary ? `<div style=\"font-size:12px;color:#334155;margin-bottom:6px;\">${String(props.ai_summary)}</div>` : ''}
-              ${props.source_url ? `<a href=\"${String(props.source_url)}\" target=\"_blank\" style=\"font-size:12px;color:#2563eb;\">Open Source</a>` : ''}
-            </div>
-          `;
-          new mapboxgl.Popup({ closeButton: true, closeOnClick: true }).setLngLat(coords).setHTML(html).addTo(map);
+            <div style="width:420px;max-width:420px;display:flex;gap:12px;">
+              <div style="flex:1;color:#111827;font-size:12px;line-height:1.4;max-height:160px;overflow:auto;">
+                <div style="font-weight:600;margin-bottom:6px;">AI Summary</div>
+                <div>${(summary || 'No summary available').replace(/</g,'&lt;')}</div>
+              </div>
+              <div style="width:160px;">${videosHtml}</div>
+            </div>`;
+          try { if (popupRef.current) popupRef.current.setHTML(html); } catch {}
+        });
+
+        map.on('mouseleave', 'unclustered-point', () => {
+          try { if (popupRef.current) popupRef.current.remove(); } catch {}
+          popupRef.current = null;
         });
 
         map.on('click', (e: mapboxgl.MapMouseEvent) => { const { lng, lat } = e.lngLat; onMapClick(lat, lng); });
@@ -183,17 +243,20 @@ export default function MapContainer({ onMapClick, onMapReady, posts = [] }: Map
     void init();
 
     return () => {
-      const map = mapRef.current as Map | null;
+      const map = mapRef.current as mapboxgl.Map | null;
       if (map) map.remove();
       mapRef.current = null;
     };
   }, [onMapClick, onMapReady]);
 
   useEffect(() => {
-    const map = mapRef.current as Map | null;
+    const map = mapRef.current as mapboxgl.Map | null;
     if (!map) return;
     const src = map.getSource(sourceId) as GeoJSONSource | undefined;
     if (!src) return;
+
+    console.log(`🗺️ MapContainer received ${posts.length} posts`);
+    console.log(`📍 Posts with coordinates:`, posts.filter(p => p.lat != null && p.lng != null).length);
 
     // If the dataset is huge, cap to viewport features for faster updates
     const shouldCap = posts.length > 3000;
@@ -218,6 +281,14 @@ export default function MapContainer({ onMapClick, onMapReady, posts = [] }: Map
 
     type PostProps = { id?: string; contributor_id: string; ai_summary?: string; source_url?: string };
     const features: Array<GeoJSON.Feature<GeoJSON.Point, PostProps>> = computeFeatures();
+
+    console.log(`🎯 Creating ${features.length} map features from posts`);
+    features.forEach((feature, index) => {
+      if (index < 5) { // Log first 5 features
+        const coords = feature.geometry.coordinates;
+        console.log(`📍 Feature ${index}: [${coords[0]}, ${coords[1]}]`);
+      }
+    });
 
     const collection: GeoJSON.FeatureCollection<GeoJSON.Point, PostProps> = { type: 'FeatureCollection', features };
     src.setData(collection);

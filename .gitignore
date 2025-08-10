@@ -14,6 +14,7 @@ build/
 .cache/
 .eslintcache
 coverage/
+cache/
 
 # Local env (keep a non-secret .env.example committed)
 .env
@@ -41,4 +42,11 @@ Thumbs.db
 *.key
 *.crt
 
+# Build info
+*.tsbuildinfo
+
+# Subgraph generated state pointer (handled via API)
 subgraph.yaml
+
+# Local tools
+.qodo/

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDynamicContext } from '@dynamic-labs/sdk-react';
 import { useDynamicWallet } from '@/hooks/useDynamicWallet';
 import { X, User, LogOut, Wallet, Sparkles } from 'lucide-react';
@@ -25,18 +25,28 @@ export default function DynamicAuthModal({ isOpen, onClose }: DynamicAuthModalPr
   };
   const [showDetails, setShowDetails] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
-  const envChainId = (process.env.NEXT_PUBLIC_EVM_CHAIN_ID || '1440002').trim();
+  const envChainId = (process.env.NEXT_PUBLIC_EVM_CHAIN_ID || '1449000').trim();
   const toHex = (id: string) => id.startsWith('0x') ? id.toLowerCase() : `0x${parseInt(id, 10).toString(16)}`;
-  const expectedChainHex = toHex(envChainId);
+  const expectedChainHex = useMemo(() => toHex(envChainId), [envChainId]);
   const expectedChainName = process.env.NEXT_PUBLIC_EVM_CHAIN_NAME;
   const expectedRpcUrl = process.env.NEXT_PUBLIC_EVM_RPC_URL;
   const expectedCurrency = process.env.NEXT_PUBLIC_EVM_CURRENCY;
   const expectedBlockExplorer = process.env.NEXT_PUBLIC_EVM_BLOCK_EXPLORER_URL;
+  const [needsNetworkSwitch, setNeedsNetworkSwitch] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !(window as any).ethereum) { setNeedsNetworkSwitch(false); return; }
+    try {
+      const current = (window as any).ethereum.chainId?.toLowerCase();
+      setNeedsNetworkSwitch(!!current && current !== expectedChainHex);
+    } catch { setNeedsNetworkSwitch(false); }
+  }, [expectedChainHex, isOpen]);
 
-  const needsNetworkSwitch = (() => {
-    if (typeof window === 'undefined' || !(window as any).ethereum) return false;
-    try { const current = (window as any).ethereum.chainId?.toLowerCase(); return !!current && current !== expectedChainHex; } catch { return false; }
-  })();
+  // When the modal opens and user is not connected, proactively open Dynamic auth flow
+  useEffect(() => {
+    if (isOpen && !isConnected) {
+      void openDynamicAuth();
+    }
+  }, [isOpen, isConnected]);
 
   async function directConnectXRPL() {
     try {

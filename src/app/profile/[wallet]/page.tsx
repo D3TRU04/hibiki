@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
-import { graphClient, GraphQLPost, GraphQLUser } from '@/lib/graph-client';
+import { useParams, useRouter } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
+import { graphClient, GraphQLPost, GraphQLUser } from '@/lib/graph/graph-client';
 import { useDynamicWallet } from '@/hooks/useDynamicWallet';
 import ProfileHeader from '@/app/profile/components/ProfileHeader';
 import ProfilePosts from '@/app/profile/components/ProfilePosts';
@@ -10,6 +11,7 @@ import NFTGallery from '@/components/NFTGallery';
 
 export default function ProfilePage() {
   const params = useParams();
+  const router = useRouter();
   const walletAddress = params.wallet as string;
   const { wallet: currentWallet, isConnected } = useDynamicWallet();
   
@@ -18,6 +20,10 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isOwnProfile, setIsOwnProfile] = useState(false);
+
+  const handleBack = () => {
+    router.back();
+  };
 
   useEffect(() => {
     const loadProfileData = async () => {

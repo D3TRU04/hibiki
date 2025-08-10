@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Trophy, Star, User, TrendingUp } from 'lucide-react';
-import { graphClient, GraphQLUser } from '@/lib/graph-client';
+import { Trophy, Medal, TrendingUp, Users, Award } from 'lucide-react';
+import { useDynamicContext } from '@dynamic-labs/sdk-react';
+import { Wallet } from '@/lib/types';
+import { graphClient, GraphQLUser } from '@/lib/graph/graph-client';
 
 export default function Leaderboard() {
   const [users, setUsers] = useState<GraphQLUser[]>([]);
@@ -79,7 +81,7 @@ export default function Leaderboard() {
                     {index + 1}
                   </div>
                   <div className="flex items-center space-x-2">
-                    <User className="w-4 h-4 text-gray-400" />
+                    <Users className="w-4 h-4 text-gray-400" />
                     <span className="text-white font-medium text-sm">
                       {user.wallet.slice(0, 6)}...{user.wallet.slice(-4)}
                     </span>
@@ -88,7 +90,7 @@ export default function Leaderboard() {
                 
                 <div className="flex items-center space-x-4 text-sm">
                   <div className="flex items-center space-x-1 text-gold">
-                    <Star className="w-4 h-4" />
+                    <Award className="w-4 h-4" />
                     <span className="font-medium">{user.total_xp}</span>
                   </div>
                   <div className="text-gray-400">

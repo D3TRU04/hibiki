@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Post } from '@/lib/types';
-import { getPosts } from '@/lib/api';
+import { getPosts } from '@/lib/api/api';
 import { Search, MapPin, Calendar, User, FileText, Mic, Video } from 'lucide-react';
 import Link from 'next/link';
 

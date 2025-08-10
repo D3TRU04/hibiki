@@ -337,7 +337,7 @@ export class GraphClient {
 
     try {
       const response = await this.executeQuery(query, { first });
-      const items = (response.data as unknown as { users?: GraphQLUser[] }).users;
+      const items = (response && response.data && (response.data as any).users) as GraphQLUser[] | undefined;
       return Array.isArray(items) ? items : [];
     } catch (error) {
       console.error('Error fetching leaderboard:', error);
@@ -345,29 +345,27 @@ export class GraphClient {
     }
   }
 
-  private async executeQuery(query: string, variables: Record<string, unknown> = {}): Promise<{ data: { users?: unknown[]; [k: string]: unknown }; errors?: unknown }> {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query,
-        variables,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`GraphQL request failed: ${response.statusText}`);
+  private async executeQuery(query: string, variables: Record<string, unknown> = {}): Promise<{ data: { users?: unknown[]; [k: string]: unknown } } | { data: {} }> {
+    try {
+      const response = await fetch(GRAPHQL_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, variables }),
+      });
+      if (!response.ok) {
+        console.warn(`GraphQL request failed: ${response.status} ${response.statusText}`);
+        return { data: {} };
+      }
+      const data: { data?: { [k: string]: unknown }; errors?: unknown } = await response.json().catch(() => ({ data: {} }));
+      if (!data || data.errors) {
+        console.warn('GraphQL returned errors or empty');
+        return { data: {} };
+      }
+      return (data as any) as { data: { users?: unknown[]; [k: string]: unknown } };
+    } catch (e) {
+      console.warn('GraphQL executeQuery exception', e);
+      return { data: {} };
     }
-
-    const data: { data: { [k: string]: unknown }; errors?: unknown } = await response.json();
-    
-    if (data.errors) {
-      throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
-    }
-
-    return data as { data: { users?: unknown[]; [k: string]: unknown }; errors?: unknown };
   }
 }
 

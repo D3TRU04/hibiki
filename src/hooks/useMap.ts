@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from 'react';
 import type mapboxgl from 'mapbox-gl';
 import { Post } from '@/lib/types';
-import { getPosts } from '@/lib/api';
+import { getPosts } from '@/lib/api/api';
 
 export function useMap() {
   const [map, setMapState] = useState<mapboxgl.Map | null>(null);
@@ -29,6 +29,8 @@ export function useMap() {
   }, []);
 
   const loadPosts = useCallback(async () => {
+    console.log('🔄 Starting to load posts...');
+    
     // Instant cache hydrate (subsequent visits)
     try {
       if (typeof window !== 'undefined') {
@@ -36,6 +38,7 @@ export function useMap() {
         if (raw) {
           const cached = JSON.parse(raw) as { posts: Post[]; ts: number };
           if (Array.isArray(cached.posts)) {
+            console.log(`📋 Using cached posts: ${cached.posts.length} posts`);
             setPosts(cached.posts);
           }
         }
@@ -44,23 +47,35 @@ export function useMap() {
 
     setIsLoading(true);
     try {
+      console.log('📡 Fetching posts from API...');
       const kleoPosts = await getPosts();
-      const convertedPosts: Post[] = kleoPosts.map(kleoPost => ({
-        id: kleoPost.id,
-        user_id: kleoPost.user_id || 'anonymous',
-        type: kleoPost.type === 'video' ? 'video' : 'text',
-        content: kleoPost.content,
-        lat: kleoPost.lat,
-        lng: kleoPost.lng,
-        media_url: kleoPost.media_url || kleoPost.ipfs_metadata_url,
-        ipfs_post_url: kleoPost.ipfs_metadata_url,
-        far_score: kleoPost.far_score || 0,
-        engagement_score: kleoPost.engagement_score || 0,
-        flags: kleoPost.flags || 0,
-        created_at: kleoPost.created_at,
-        updated_at: kleoPost.created_at,
-        tags: [],
-      }));
+      console.log(`📊 API returned ${kleoPosts.length} KleoPosts`);
+      
+      const convertedPosts: Post[] = kleoPosts.map(kleoPost => {
+        const post: Post = {
+          id: kleoPost.id,
+          user_id: kleoPost.user_id || 'anonymous',
+          type: kleoPost.type === 'video' ? 'video' : 'text',
+          content: kleoPost.content,
+          lat: kleoPost.lat,
+          lng: kleoPost.lng,
+          media_url: kleoPost.media_url || kleoPost.ipfs_metadata_url,
+          ipfs_post_url: kleoPost.ipfs_metadata_url,
+          far_score: kleoPost.far_score || 0,
+          engagement_score: kleoPost.engagement_score || 0,
+          flags: kleoPost.flags || 0,
+          created_at: kleoPost.created_at,
+          updated_at: kleoPost.created_at,
+          tags: [],
+        };
+        
+        console.log(`📍 Converting post ${post.id}: lat=${post.lat}, lng=${post.lng}`);
+        return post;
+      });
+      
+      console.log(`✅ Converted ${convertedPosts.length} posts to Post format`);
+      console.log(`📍 Posts with valid coordinates:`, convertedPosts.filter(p => p.lat != null && p.lng != null).length);
+      
       setPosts(convertedPosts);
       try {
         if (typeof window !== 'undefined') {
@@ -68,7 +83,7 @@ export function useMap() {
         }
       } catch {}
     } catch (error) {
-      console.error('Error loading posts:', error);
+      console.error('❌ Error loading posts:', error);
     } finally {
       setIsLoading(false);
     }

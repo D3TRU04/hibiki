@@ -44,18 +44,18 @@ module.exports = {
     customChains: [
       {
         network: "rippleEVMTestnet",
-        chainId: 1440002,
+        chainId: 1449000,
         urls: {
-          apiURL: "https://evm-sidechain.xrpl.org/api",
-          browserURL: "https://evm-sidechain.xrpl.org",
+          apiURL: "https://explorer.testnet.xrplevm.org/api",
+          browserURL: "https://explorer.testnet.xrplevm.org",
         },
       },
       {
         network: "rippleEVMMainnet",
         chainId: 1440001,
         urls: {
-          apiURL: "https://evm-sidechain.xrpl.org/api",
-          browserURL: "https://evm-sidechain.xrpl.org",
+          apiURL: "https://explorer.testnet.xrplevm.org/api",
+          browserURL: "https://explorer.testnet.xrplevm.org",
         },
       },
     ],

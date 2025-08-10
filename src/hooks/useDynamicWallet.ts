@@ -18,6 +18,77 @@ export function useDynamicWallet() {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Network switching effect - ensure wallet is on XRPL EVM Sidechain Testnet
+  useEffect(() => {
+    if (!isLoggedIn || !primaryWallet) return;
+
+    const switchToCorrectNetwork = async () => {
+      try {
+        const eth = (window as any).ethereum;
+        if (!eth) return;
+
+        const expectedChainId = process.env.NEXT_PUBLIC_EVM_CHAIN_ID || '1449000';
+        const expectedChainHex = expectedChainId.startsWith('0x') 
+          ? expectedChainId.toLowerCase() 
+          : `0x${parseInt(expectedChainId, 10).toString(16)}`;
+
+        // Check current network
+        const currentChainId = await eth.request({ method: 'eth_chainId' });
+        
+        if (currentChainId !== expectedChainHex) {
+          console.log('🔄 Switching to XRPL EVM Sidechain Testnet...');
+          
+          try {
+            // Try to switch to the correct network
+            await eth.request({ 
+              method: 'wallet_switchEthereumChain', 
+              params: [{ chainId: expectedChainHex }] 
+            });
+            console.log('✅ Successfully switched to XRPL EVM Sidechain Testnet');
+          } catch (switchError: any) {
+            // If network is unknown, add it first
+            if (switchError.code === 4902) {
+              const chainName = process.env.NEXT_PUBLIC_EVM_CHAIN_NAME || 'XRPL EVM Sidechain Testnet';
+              const rpcUrl = process.env.NEXT_PUBLIC_EVM_RPC_URL || 'https://rpc.testnet.xrplevm.org/';
+              const currency = process.env.NEXT_PUBLIC_EVM_CURRENCY || 'XRP';
+              const blockExplorer = process.env.NEXT_PUBLIC_EVM_BLOCK_EXPLORER_URL || 'https://explorer.testnet.xrplevm.org/';
+              
+              await eth.request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                  chainId: expectedChainHex,
+                  chainName: chainName,
+                  rpcUrls: [rpcUrl],
+                  nativeCurrency: { 
+                    name: currency, 
+                    symbol: currency, 
+                    decimals: 18 
+                  },
+                  blockExplorerUrls: [blockExplorer],
+                }],
+              });
+              
+              // Now switch to the added network
+              await eth.request({ 
+                method: 'wallet_switchEthereumChain', 
+                params: [{ chainId: expectedChainHex }] 
+              });
+              console.log('✅ Successfully added and switched to XRPL EVM Sidechain Testnet');
+            } else {
+              console.warn('⚠️ Failed to switch network:', switchError);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error switching network:', error);
+      }
+    };
+
+    // Add a small delay to ensure wallet is fully connected
+    const timer = setTimeout(switchToCorrectNetwork, 1000);
+    return () => clearTimeout(timer);
+  }, [isLoggedIn, primaryWallet]);
+
   // Dynamic-authenticated wallet path
   useEffect(() => {
     let done = false;

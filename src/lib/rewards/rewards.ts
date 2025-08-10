@@ -1,4 +1,4 @@
-import { KleoPost, User } from './types';
+import { KleoPost, User } from '../types';
 
 // Simple XP Configuration for MVP
 const XP_CONFIG = {

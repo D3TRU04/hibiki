@@ -1,5 +1,5 @@
-import { Client, Wallet, dropsToXrp, xrpToDrops, isValidClassicAddress } from 'xrpl';
-import { XRPLWallet } from './types';
+import { Client, Wallet as XRPLWallet, dropsToXrp, xrpToDrops, isValidClassicAddress } from 'xrpl';
+import { XRPLWallet as XRPLWalletType, User } from '../types';
 
 // XRPL network configuration
 const XRPL_NETWORK = process.env.NEXT_PUBLIC_XRPL_NETWORK || 'testnet';
@@ -9,7 +9,7 @@ const XRPL_SERVER = XRPL_NETWORK === 'mainnet'
 
 class XRPLWalletService {
   private client: Client | null = null;
-  private wallet: Wallet | null = null;
+  private wallet: XRPLWallet | null = null;
   private isConnected = false;
 
   constructor() {
@@ -27,13 +27,13 @@ class XRPLWalletService {
   }
 
   // Generate a new wallet
-  async generateWallet(): Promise<XRPLWallet> {
+  async generateWallet(): Promise<XRPLWalletType> {
     if (!this.client) {
       throw new Error('XRPL client not connected');
     }
 
     try {
-      const wallet = Wallet.generate();
+      const wallet = XRPLWallet.generate();
       const balance = await this.getBalance(wallet.address);
 
       this.wallet = wallet;
@@ -52,13 +52,13 @@ class XRPLWalletService {
   }
 
   // Import wallet from seed
-  async importWallet(seed: string): Promise<XRPLWallet> {
+  async importWallet(seed: string): Promise<XRPLWalletType> {
     if (!this.client) {
       throw new Error('XRPL client not connected');
     }
 
     try {
-      const wallet = Wallet.fromSeed(seed);
+      const wallet = XRPLWallet.fromSeed(seed);
       const balance = await this.getBalance(wallet.address);
 
       this.wallet = wallet;
@@ -163,7 +163,7 @@ class XRPLWalletService {
   }
 
   // Get current wallet info
-  getCurrentWallet(): XRPLWallet | null {
+  getCurrentWallet(): XRPLWalletType | null {
     if (!this.wallet) {
       return null;
     }

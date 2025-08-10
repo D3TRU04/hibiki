@@ -1,5 +1,5 @@
-import { createUser, getCurrentUser, updateUser, signOut } from './api';
-import { User } from './types';
+import { getCurrentUser, createUser, updateUser, signOut } from '../api/api';
+import { User } from '../types';
 
 // Check if we're in a browser environment
 const isBrowser = typeof window !== 'undefined';

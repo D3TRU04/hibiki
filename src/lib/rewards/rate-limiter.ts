@@ -1,4 +1,4 @@
-import { RateLimitInfo } from './types';
+import { User } from '../types';
 
 const RATE_LIMIT_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 const RATE_LIMIT_STORAGE_KEY = 'kleo_rate_limit';
@@ -7,6 +7,12 @@ interface RateLimitData {
   [walletAddress: string]: {
     lastPostTime: number;
   };
+}
+
+interface RateLimitInfo {
+  canPost: boolean;
+  timeRemaining: number;
+  lastPostTime?: number;
 }
 
 export class RateLimiterService {

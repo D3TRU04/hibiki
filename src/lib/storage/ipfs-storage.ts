@@ -6,8 +6,33 @@ import {
   User, 
   Post, 
   CreatePostData,
-  RewardSystem 
-} from './types';
+  RewardSystem,
+  KleoPost
+} from '../types';
+
+// Get crypto object safely
+const getCrypto = () => {
+  if (typeof window !== 'undefined') {
+    return window.crypto;
+  }
+  // Node.js environment
+  if (typeof global !== 'undefined' && global.crypto) {
+    return global.crypto;
+  }
+  // Fallback for older Node.js versions
+  return require('crypto').webcrypto;
+};
+
+// Generate UUID safely
+function generateUUID(): string {
+  try {
+    const crypto = getCrypto();
+    return crypto.randomUUID();
+  } catch (error) {
+    // Fallback if crypto.randomUUID is not available
+    return `${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+}
 
 export async function uploadBlob(content: Blob): Promise<string> {
   const cid = await pinFileToIPFS(new File([content], 'content.bin'));
@@ -56,6 +81,13 @@ export class IPFSStorage {
           this.globalStateUrl = `ipfs://${data.cid}`;
         }
       }
+      // Fallback to locally cached latest state cid (for immediate availability after write)
+      if (!this.globalStateUrl && typeof window !== 'undefined') {
+        const cachedCid = localStorage.getItem('kleo_latest_state_cid');
+        if (cachedCid) {
+          this.globalStateUrl = `ipfs://${cachedCid}`;
+        }
+      }
       if (this.globalStateUrl) {
         const response = await fetch(this.getIPFSGatewayUrl(this.globalStateUrl));
         if (response.ok) {
@@ -75,6 +107,8 @@ export class IPFSStorage {
       const url = `ipfs://${cid}`;
       this.globalStateUrl = url;
       console.log('Global state saved to IPFS:', url);
+      // Cache latest cid locally for immediate reads on next load
+      try { if (typeof window !== 'undefined') localStorage.setItem('kleo_latest_state_cid', cid); } catch {}
       // Update pointer on server (best-effort)
       try {
         await fetch('/api/state/update', {
@@ -92,7 +126,7 @@ export class IPFSStorage {
 
   // User management
   async createUser(userData: Partial<User>): Promise<User> {
-    const userId = userData.id || crypto.randomUUID();
+    const userId = userData.id || generateUUID();
     const now = new Date().toISOString();
 
     const user: User = {
@@ -221,7 +255,7 @@ export class IPFSStorage {
       throw new Error('Rate limit: You can only post once every 10 minutes');
     }
 
-    const postId = crypto.randomUUID();
+    const postId = generateUUID();
     const nowISO = new Date().toISOString();
 
     let mediaUrl: string | undefined;
@@ -311,6 +345,159 @@ export class IPFSStorage {
     return post;
   }
 
+  // Persist an already-created KleoPost (from alternate flow) into global state
+  async createPostFromKleo(kleo: KleoPost): Promise<Post> {
+    const nowISO = new Date().toISOString();
+    const postId = kleo.id || generateUUID();
+
+    const post: Post = {
+      id: postId,
+      user_id: kleo.user_id || 'external',
+      type: kleo.type === 'video' ? 'video' : 'text',
+      content: kleo.content || '',
+      lat: kleo.lat,
+      lng: kleo.lng,
+      media_url: kleo.media_url || kleo.ipfs_metadata_url,
+      ipfs_metadata_url: kleo.ipfs_metadata_url,
+      far_score: kleo.far_score ?? 0,
+      engagement_score: kleo.engagement_score ?? 0,
+      flags: kleo.flags ?? 0,
+      created_at: kleo.created_at || nowISO,
+      updated_at: kleo.updated_at || nowISO,
+      tags: [],
+    } as Post;
+
+    // Add to global state
+    globalState.posts[postId] = post;
+    globalState.total_posts++;
+    
+    // Clear post cache to ensure fresh data
+    postCache.delete(postId);
+    
+    console.log(`✅ Post ${postId} added to global state. Total posts: ${globalState.total_posts}`);
+    console.log(`📍 Post location: ${post.lat}, ${post.lng}`);
+    
+    // Save global state to IPFS
+    try {
+      await this.saveGlobalState();
+      console.log(`💾 Global state saved to IPFS for post ${postId}`);
+    } catch (error) {
+      console.error(`❌ Failed to save global state for post ${postId}:`, error);
+    }
+    
+    // Add to post cache
+    postCache.set(postId, post);
+    return post;
+  }
+
+  // Refresh global state from IPFS (useful for syncing with Pinata)
+  async refreshGlobalState(): Promise<void> {
+    try {
+      console.log('🔄 Refreshing global state from IPFS...');
+      await this.loadGlobalState();
+      console.log(`✅ Global state refreshed. Total posts: ${globalState.total_posts}`);
+    } catch (error) {
+      console.error('❌ Failed to refresh global state:', error);
+    }
+  }
+
+  // Sync posts from Pinata to local state
+  async syncFromPinata(): Promise<void> {
+    try {
+      console.log('🔄 Syncing posts from Pinata...');
+      
+      // Try to get the latest state pointer
+      const pointerResp = await fetch('/api/state/latest', { cache: 'no-store' }).catch(() => null as any);
+      if (pointerResp && pointerResp.ok) {
+        const data = (await pointerResp.json()) as { cid?: string | null };
+        if (data?.cid) {
+          console.log(`📍 Latest state CID: ${data.cid}`);
+          
+          // Load the latest state
+          const response = await fetch(`https://ipfs.io/ipfs/${data.cid}`);
+          if (response.ok) {
+            const latestState = await response.json() as IPFSGlobalState;
+            console.log(`📊 Latest state has ${latestState.total_posts} posts`);
+            
+            // Merge with current state
+            Object.assign(globalState, latestState);
+            globalState.last_updated = latestState.last_updated;
+            
+            // Clear caches to ensure fresh data
+            postCache.clear();
+            userCache.clear();
+            
+            console.log(`✅ Synced ${globalState.total_posts} posts from Pinata`);
+            return;
+          }
+        }
+      }
+      
+      // Fallback: if state pointer fails, try to load from local cache
+      console.log('⚠️ State pointer failed, trying local cache...');
+      const cachedCid = localStorage.getItem('kleo_latest_state_cid');
+      if (cachedCid) {
+        try {
+          const response = await fetch(`https://ipfs.io/ipfs/${cachedCid}`);
+          if (response.ok) {
+            const latestState = await response.json() as IPFSGlobalState;
+            console.log(`📊 Cached state has ${latestState.total_posts} posts`);
+            
+            // Merge with current state
+            Object.assign(globalState, latestState);
+            globalState.last_updated = latestState.last_updated;
+            
+            // Clear caches to ensure fresh data
+            postCache.clear();
+            userCache.clear();
+            
+            console.log(`✅ Synced ${globalState.total_posts} posts from cached state`);
+            return;
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to load cached state:', error);
+        }
+      }
+      
+      console.log('ℹ️ No external state to sync, using current local state');
+      
+    } catch (error) {
+      console.error('❌ Failed to sync from Pinata:', error);
+    }
+  }
+
+  // Manually add a post to the global state (useful for testing)
+  async addPostToGlobalState(post: Post): Promise<void> {
+    try {
+      if (!post.id) {
+        console.error('❌ Cannot add post without ID to global state');
+        return;
+      }
+      
+      globalState.posts[post.id] = post;
+      globalState.total_posts++;
+      
+      // Clear post cache to ensure fresh data
+      postCache.delete(post.id);
+      
+      console.log(`✅ Post ${post.id} manually added to global state. Total posts: ${globalState.total_posts}`);
+      console.log(`📍 Post location: ${post.lat}, ${post.lng}`);
+      
+      // Save global state to IPFS
+      try {
+        await this.saveGlobalState();
+        console.log(`💾 Global state saved to IPFS for post ${post.id}`);
+      } catch (error) {
+        console.error(`❌ Failed to save global state for post ${post.id}:`, error);
+      }
+      
+      // Add to post cache
+      postCache.set(post.id, post);
+    } catch (error) {
+      console.error(`❌ Failed to add post ${post.id} to global state:`, error);
+    }
+  }
+
   // Upload a single file to IPFS
   async uploadFile(file: File): Promise<string> {
     try {
@@ -325,13 +512,18 @@ export class IPFSStorage {
   }
 
   async getPosts(): Promise<Post[]> {
+    console.log(`🔍 Fetching posts from global state. Total posts in state: ${globalState.total_posts}`);
+    console.log(`📊 Global state posts keys:`, Object.keys(globalState.posts));
+    
     const posts: Post[] = [];
 
     for (const [postId, postData] of Object.entries(globalState.posts)) {
       try {
         // Check cache first
         if (postCache.has(postId)) {
-          posts.push(postCache.get(postId)!);
+          const cachedPost = postCache.get(postId)!;
+          posts.push(cachedPost);
+          console.log(`📋 Using cached post ${postId} at ${cachedPost.lat}, ${cachedPost.lng}`);
           continue;
         }
 
@@ -340,13 +532,16 @@ export class IPFSStorage {
         if (typeof postData === 'object') {
           // Post is already stored as object in global state
           post = postData as Post;
+          console.log(`📄 Post ${postId} found in global state at ${post.lat}, ${post.lng}`);
         } else {
           // Post is stored as URL, try to fetch from IPFS
+          console.log(`🔗 Fetching post ${postId} from IPFS URL: ${postData}`);
           const response = await fetch(this.getIPFSGatewayUrl(postData));
           if (response.ok) {
             post = await response.json();
+            console.log(`✅ Post ${postId} fetched from IPFS at ${post.lat}, ${post.lng}`);
           } else {
-            console.error(`Failed to fetch post ${postId} from IPFS`);
+            console.error(`❌ Failed to fetch post ${postId} from IPFS`);
             continue;
           }
         }
@@ -362,12 +557,16 @@ export class IPFSStorage {
         postCache.set(postId, post);
         posts.push(post);
       } catch (error) {
-        console.error(`Error fetching post ${postId}:`, error);
+        console.error(`❌ Error fetching post ${postId}:`, error);
       }
     }
 
+    console.log(`🎯 Returning ${posts.length} posts with valid coordinates`);
+    const postsWithCoords = posts.filter(p => p.lat != null && p.lng != null);
+    console.log(`📍 Posts with coordinates: ${postsWithCoords.length}`);
+
     // Sort by creation date (newest first)
-    return posts.sort((a, b) => 
+    return postsWithCoords.sort((a, b) => 
       new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()
     );
   }

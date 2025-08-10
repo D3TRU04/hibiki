@@ -1,7 +1,9 @@
 'use client';
 
-import { MessageSquare } from 'lucide-react';
-import { GraphQLPost } from '@/lib/graph-client';
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
+import { GraphQLPost } from '@/lib/graph/graph-client';
+import { MessageSquare, Video, Link as LinkIcon } from 'lucide-react';
 import StoryCard from '@/app/components/StoryCard';
 import { KleoPost } from '@/lib/types';
 

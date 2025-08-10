@@ -50,11 +50,7 @@ export default function MapSidebar({
         </div>
       )}
 
-      {showUserPanel && showStoryFeed && (
-        <div className="p-4 border-t border-gray-200">
-          <Leaderboard />
-        </div>
-      )}
+      {/* Leaderboard moved to a different location */}
     </div>
   );
 } 

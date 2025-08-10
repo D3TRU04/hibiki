@@ -1,5 +1,5 @@
 import { ethers, parseEther, formatEther, parseUnits, JsonRpcProvider, Contract } from 'ethers';
-import { KleoPost } from './types';
+import { KleoPost } from '../types';
 
 // NFT Contract ABI (updated for Ripple EVM with XRPL integration)
 const NFT_CONTRACT_ABI = [
@@ -21,8 +21,8 @@ const NFT_CONTRACT_ABI = [
 const CONTRACT_CONFIG = {
   // Ripple EVM Sidechain testnet
   network: 'ripple-evm-testnet',
-  chainId: 1440002, // Ripple EVM testnet chain ID
-  rpcUrl: 'https://rpc-evm-sidechain.xrpl.org', // Ripple EVM RPC
+  chainId: 1449000, // Ripple EVM testnet chain ID
+  rpcUrl: process.env.RIPPLE_EVM_RPC_URL || 'https://rpc.testnet.xrplevm.org/', // Ripple EVM RPC
   // Contract address (will be deployed)
   contractAddress: process.env.NEXT_PUBLIC_NFT_CONTRACT_ADDRESS || '',
   // Spam prevention settings
@@ -136,7 +136,7 @@ export class NFTContractService {
   }
 
   // Mint NFT for a post
-  async mintNFT(post: KleoPost, userAddress: string, signer: ethers.Signer): Promise<NFTMintResult> {
+  async mintNFT(post: KleoPost, userAddress: string, signer: ethers.Signer, contributorEmail?: string): Promise<NFTMintResult> {
     if (!this.contract) {
       return {
         success: false,
@@ -167,7 +167,8 @@ export class NFTContractService {
           { trait_type: 'Is Reliable', value: post.is_reliable || false }
         ],
         external_url: post.source_url || '',
-        ai_summary: post.ai_summary || ''
+        ai_summary: post.ai_summary || '',
+        contributor_email: contributorEmail || undefined
       };
 
       // Determine CID to use (prefer metadata, fallback to media)

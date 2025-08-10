@@ -59,6 +59,7 @@ export default function GlassyNavbar({
             wallet={wallet}
             onDisconnect={onDisconnect}
           />
+          <a href="/leaderboard" className="hidden md:block px-3 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 rounded-lg text-white text-sm transition-all">Leaderboard</a>
           
           <NavbarMobile
             onAddStory={onAddStory}

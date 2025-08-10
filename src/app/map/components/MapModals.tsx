@@ -49,18 +49,22 @@ export default function MapModals({
         />
       )}
 
-      <DynamicAuthModal 
-        isOpen={showAuthModal}
-        onClose={onCloseAuthModal}
-      />
+      {showAuthModal ? (
+        <DynamicAuthModal 
+          isOpen={showAuthModal}
+          onClose={onCloseAuthModal}
+        />
+      ) : null}
 
-      <NFTMintingNotification
-        isVisible={showNFTNotification}
-        onClose={onCloseNFTNotification}
-        tokenId={nftMintingData?.tokenId}
-        transactionHash={nftMintingData?.transactionHash}
-        postCid={nftMintingData?.postCid}
-      />
+      {showNFTNotification ? (
+        <NFTMintingNotification
+          isVisible={showNFTNotification}
+          onClose={onCloseNFTNotification}
+          tokenId={nftMintingData?.tokenId}
+          transactionHash={nftMintingData?.transactionHash}
+          postCid={nftMintingData?.postCid}
+        />
+      ) : null}
     </>
   );
 } 

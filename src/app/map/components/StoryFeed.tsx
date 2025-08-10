@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Filter, Search, Video, Link, MessageSquare } from 'lucide-react';
 import { KleoPost } from '@/lib/types';
 import StoryCard from './StoryCard';
+import { aiSummaryService } from '@/lib/ai/ai-summary';
 
 interface StoryFeedProps {
   posts: KleoPost[];
@@ -20,6 +21,7 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
   const [activeFilter, setActiveFilter] = useState<FilterType>(selectedType as FilterType || 'all');
   const [searchTerm, setSearchTerm] = useState(selectedTag || '');
   const [showFilters, setShowFilters] = useState(false);
+  const [locationSummary, setLocationSummary] = useState<{ summary: string; videos: string[]; title: string } | null>(null);
 
   useEffect(() => {
     let filtered = posts;
@@ -41,6 +43,40 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
 
     setFilteredPosts(filtered);
   }, [posts, activeFilter, searchTerm, selectedTag, selectedType]);
+
+  useEffect(() => {
+    // Aggregate the most recent location group from filteredPosts
+    if (!filteredPosts.length) { setLocationSummary(null); return; }
+    const top = filteredPosts.slice(0, 50); // consider a window for performance
+    // Group by rounded lat/lng
+    const groupMap = new Map<string, KleoPost[]>();
+    for (const p of top) {
+      const key = `${Number(p.lat).toFixed(4)},${Number(p.lng).toFixed(4)}`;
+      const arr = groupMap.get(key) || [];
+      arr.push(p);
+      groupMap.set(key, arr);
+    }
+    // Pick the largest group
+    let chosenKey: string | null = null;
+    let chosen: KleoPost[] = [];
+    for (const [k, arr] of groupMap.entries()) {
+      if (arr.length > chosen.length) { chosen = arr; chosenKey = k; }
+    }
+    if (!chosenKey || !chosen.length) { setLocationSummary(null); return; }
+    const title = `Location ${chosenKey}`;
+    const newsText = chosen.filter(p => p.type !== 'video').map(p => p.ai_summary || p.content).filter(Boolean).join('\n\n');
+    const videos = chosen.filter(p => p.type === 'video' || p.content_type === 'media' || !!p.media_url)
+      .map(p => (p.media_url?.startsWith('ipfs://') ? `https://ipfs.io/ipfs/${p.media_url.replace('ipfs://','')}` : p.media_url || p.ipfs_post_url))
+      .filter(Boolean) as string[];
+    (async () => {
+      try {
+        const ai = await aiSummaryService.generateSummary({ mediaType: 'news', content: newsText || 'No news content provided.' });
+        setLocationSummary({ summary: ai.summary, videos: videos.slice(0, 3), title });
+      } catch {
+        setLocationSummary({ summary: 'Summary unavailable.', videos: videos.slice(0, 3), title });
+      }
+    })();
+  }, [filteredPosts]);
 
   const handleSetFilter = (filter: FilterType) => {
     setActiveFilter(filter);
@@ -75,6 +111,24 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
+      {locationSummary && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">{locationSummary.title}</h3>
+          <div className="flex gap-3">
+            <div className="flex-1 text-sm text-gray-800 leading-relaxed max-h-40 overflow-auto">
+              <div className="font-medium mb-1">AI Summary</div>
+              <div>{locationSummary.summary}</div>
+            </div>
+            <div className="w-40 space-y-2">
+              {locationSummary.videos.length
+                ? locationSummary.videos.map((v, i) => (
+                    <video key={i} src={v} controls className="w-full h-20 object-cover rounded" preload="metadata" />
+                  ))
+                : <div className="text-xs text-gray-500">No media</div>}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Global Feed</h2>

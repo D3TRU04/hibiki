@@ -1,6 +1,6 @@
-import { AISummary } from './types';
-import { OpenAIClient } from './ai/openai-client';
-import { buildNewsArticlePrompt, buildVideoSummaryPrompt, SummaryRequest } from './ai/prompts';
+import { AISummary } from '../types';
+import { OpenAIClient } from './openai-client';
+import { buildNewsArticlePrompt, buildVideoSummaryPrompt, SummaryRequest } from './prompts';
 
 class AISummaryService {
   private openaiClient: OpenAIClient;
@@ -19,10 +19,8 @@ class AISummaryService {
         summary: response,
         keywords,
         confidence: 0.85,
-        // extra metadata omitted to match AISummary type
       } as AISummary;
     } catch (error) {
-      console.error('AI Summary generation failed:', error);
       return this.getFallbackSummary(request);
     }
   }
@@ -39,7 +37,7 @@ class AISummaryService {
   }
 
   private getFallbackSummary(request: SummaryRequest): AISummary {
-    const fallbackText = request.mediaType === 'video' 
+    const fallbackText = request.mediaType === 'video'
       ? 'Video content submitted to this location.'
       : 'News article submitted to this location.';
 
@@ -47,7 +45,6 @@ class AISummaryService {
       summary: fallbackText,
       keywords: ['content', 'location', 'submission'],
       confidence: 0.1,
-      // extra metadata omitted
     } as AISummary;
   }
 }

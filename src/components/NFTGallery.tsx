@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Coins, ExternalLink, Video, Link as LinkIcon, MessageSquare } from 'lucide-react';
-import { graphClient, GraphQLNFT } from '@/lib/graph-client';
+import { useDynamicContext } from '@dynamic-labs/sdk-react';
+import { Image, ExternalLink } from 'lucide-react';
+import { graphClient, GraphQLNFT } from '@/lib/graph/graph-client';
 
 interface NFTGalleryProps {
   walletAddress: string;
@@ -49,14 +50,14 @@ export default function NFTGallery({ walletAddress }: NFTGalleryProps) {
       
       switch (mediaType) {
         case 'video':
-          return <Video className="w-4 h-4" />;
+          return <Image className="w-4 h-4" />;
         case 'news':
-          return <LinkIcon className="w-4 h-4" />;
+          return <ExternalLink className="w-4 h-4" />;
         default:
-          return <MessageSquare className="w-4 h-4" />;
+          return <Image className="w-4 h-4" />;
       }
     } catch {
-      return <Coins className="w-4 h-4" />;
+      return <Image className="w-4 h-4" />;
     }
   };
 
@@ -102,7 +103,7 @@ export default function NFTGallery({ walletAddress }: NFTGalleryProps) {
   return (
     <div className="bg-white/10 backdrop-blur-md rounded-lg p-6 border border-white/20">
       <div className="flex items-center space-x-2 mb-4">
-        <Coins className="w-5 h-5 text-gold" />
+        <Image className="w-5 h-5 text-gold" />
         <h3 className="text-lg font-semibold text-white">NFT Collection</h3>
         <span className="text-gray-300 text-sm">({nfts.length})</span>
       </div>
@@ -145,7 +146,7 @@ export default function NFTGallery({ walletAddress }: NFTGalleryProps) {
       ) : (
         <div className="text-center py-8">
           <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Coins className="w-8 h-8 text-gray-400" />
+            <Image className="w-8 h-8 text-gray-400" />
           </div>
           <h3 className="text-lg font-medium text-white mb-2">No NFTs yet</h3>
           <p className="text-gray-400">

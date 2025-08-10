@@ -17,7 +17,7 @@ type MapModalsProps = { isSubmissionFormOpen: boolean; selectedLocation: { lat: 
 const MapModals = dynamic<MapModalsProps>(withRetry(() => import('./MapModals')), { ssr: false });
 const DynamicProvider = dynamic(withRetry(() => import('@/components/DynamicProvider')), { ssr: false, loading: () => null });
 
-export default function MapView() {
+function MapViewInner() {
   const [isSubmissionFormOpen, setIsSubmissionFormOpen] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -27,7 +27,6 @@ export default function MapView() {
   const [selectedType, setSelectedType] = useState<string>('');
   const [showNFTNotification, setShowNFTNotification] = useState(false);
   const [nftMintingData, _setNftMintingData] = useState<{ tokenId?: string; transactionHash?: string; postCid?: string; } | null>(null);
-  const [initDynamic, setInitDynamic] = useState(false);
   const [isMapReady, setIsMapReady] = useState(false);
   const [pendingShare, setPendingShare] = useState(false);
 
@@ -47,9 +46,6 @@ export default function MapView() {
   }, [setMap, loadPosts]);
 
   const handleAddStory = useCallback(() => {
-    // Ensure dynamic context is initialized so modals can render
-    setInitDynamic(true);
-
     if (!isConnected || !wallet) {
       setPendingShare(true);
       setShowAuthModal(true);
@@ -109,14 +105,12 @@ export default function MapView() {
   })), [limitedPosts]);
 
   const connectClick = useCallback(() => {
-    setInitDynamic(true);
     setShowAuthModal(true);
   }, []);
 
   // If user clicked Share Story while unauthenticated, open the submission form once connected
   useEffect(() => {
     if (pendingShare && isConnected && wallet) {
-      setInitDynamic(true);
       setShowAuthModal(false);
       setSelectedLocation(null);
       setIsSubmissionFormOpen(true);
@@ -140,11 +134,6 @@ export default function MapView() {
       <div className="pt-16 h-full relative z-10 flex">
         <div className={`relative transition-all duration-300 ${showStoryFeed || showUserPanel ? 'w-2/3' : 'w-full'}`}>
           <MapContainer onMapClick={handleMapClick} onMapReady={handleMapReady} posts={mapPosts} />
-          {isLoading && (
-            <div className="absolute inset-0 pointer-events-none">
-              <div className="w-full h-full animate-pulse bg-white/5" />
-            </div>
-          )}
         </div>
         {isMapReady && (
           <MapSidebar
@@ -158,22 +147,26 @@ export default function MapView() {
           />
         )}
       </div>
-      {initDynamic ? (
-        <DynamicProvider>
-          <MapModals
-            isSubmissionFormOpen={isSubmissionFormOpen}
-            selectedLocation={selectedLocation}
-            showAuthModal={showAuthModal}
-            showNFTNotification={showNFTNotification}
-            nftMintingData={nftMintingData}
-            wallet={wallet}
-            onCloseSubmissionForm={() => { setIsSubmissionFormOpen(false); setSelectedLocation(null); }}
-            onCloseAuthModal={() => { setShowAuthModal(false); setPendingShare(false); }}
-            onCloseNFTNotification={() => setShowNFTNotification(false)}
-            onPostCreated={handlePostCreated}
-          />
-        </DynamicProvider>
-      ) : null}
+      <MapModals
+        isSubmissionFormOpen={isSubmissionFormOpen}
+        selectedLocation={selectedLocation}
+        showAuthModal={showAuthModal}
+        showNFTNotification={showNFTNotification}
+        nftMintingData={nftMintingData}
+        wallet={wallet}
+        onCloseSubmissionForm={() => { setIsSubmissionFormOpen(false); setSelectedLocation(null); }}
+        onCloseAuthModal={() => { setShowAuthModal(false); setPendingShare(false); }}
+        onCloseNFTNotification={() => setShowNFTNotification(false)}
+        onPostCreated={handlePostCreated}
+      />
     </div>
+  );
+}
+
+export default function MapView() {
+  return (
+    <DynamicProvider>
+      <MapViewInner />
+    </DynamicProvider>
   );
 } 

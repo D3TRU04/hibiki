@@ -1,7 +1,9 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { User, Star, MapPin, Calendar, Trophy, Coins, MessageSquare } from 'lucide-react';
-import { GraphQLUser, GraphQLPost } from '@/lib/graph-client';
+import { GraphQLUser, GraphQLPost } from '@/lib/graph/graph-client';
 import { getWalletDisplayName } from '@/lib/identity';
 
 interface ProfileHeaderProps {

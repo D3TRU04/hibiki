@@ -1,3 +1,5 @@
+# Extended schema for Kleo
+
 type NFTMinted @entity {
   id: ID!
   owner: String!
@@ -10,14 +12,43 @@ type NFTMinted @entity {
   blockTimestamp: BigInt!
 }
 
+type PostSubmitted @entity {
+  id: ID!
+  wallet: String!
+  post_cid: String!
+  media_type: String!
+  lat: Float!
+  lng: Float!
+  source_url: String
+  summary_text: String
+  timestamp: BigInt!
+}
+
+type RewardClaimed @entity {
+  id: ID!
+  wallet: String!
+  amount: BigInt!
+  total_xp: Int!
+  timestamp: BigInt!
+  transaction_hash: String!
+}
+
 type User @entity {
   id: ID!
+  wallet: String!
+  total_xp: Int!
+  total_posts: Int!
   total_nfts: Int!
+  total_rewards_claimed: Int!
   last_activity: BigInt!
 }
 
 type GlobalStats @entity {
   id: ID!
+  total_posts: Int!
   total_nfts: Int!
+  total_rewards_claimed: Int!
+  total_xp_distributed: Int!
+  unique_users: Int!
   last_updated: BigInt!
 } 

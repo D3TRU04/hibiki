@@ -1,5 +1,5 @@
 import { pinFileToIPFS, pinJSONToIPFS } from './pinata';
-import { KleoPost } from './types';
+import { KleoPost } from '../types';
 
 type JSONValue = string | number | boolean | null | JSONObject | JSONValue[];
 interface JSONObject { [key: string]: JSONValue }
