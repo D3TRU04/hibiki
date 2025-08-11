@@ -30,7 +30,7 @@ export function useWallet(): Wallet {
           setEnsName(wallet.ensName || '');
           setIsConnected(true);
         } catch (error) {
-          console.error('Error loading wallet state:', error);
+          // Handle error silently
         }
       }
     }
@@ -81,7 +81,7 @@ export function useWallet(): Wallet {
               ensName = ensResult;
             }
           } catch {
-            console.log('ENS resolution failed, using address only');
+            // ENS resolution failed, using address only
           }
 
           // Save to localStorage
@@ -99,10 +99,7 @@ export function useWallet(): Wallet {
         throw new Error('MetaMask not found. Please install MetaMask to connect your wallet.');
       }
     } catch (error) {
-      console.error('Failed to connect wallet:', error);
-      // Show user-friendly error message
-      alert(`Failed to connect wallet: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      return false;
+      // Handle error silently
     }
   }, [saveWalletState]);
 

@@ -25,7 +25,7 @@ export class AuthService {
     try {
       this.currentUser = await getCurrentUser();
     } catch {
-      console.log('No existing user session found');
+      // No existing user session found
     }
   }
 
@@ -43,7 +43,6 @@ export class AuthService {
       this.currentUser = user;
       return user;
     } catch (error) {
-      console.error('Error during sign up:', error);
       throw error;
     }
   }
@@ -63,7 +62,6 @@ export class AuthService {
       const newUser = await this.signUp(email);
       return newUser;
     } catch (error) {
-      console.error('Error during sign in:', error);
       throw error;
     }
   }
@@ -73,7 +71,6 @@ export class AuthService {
       await signOut();
       this.currentUser = null;
     } catch (error) {
-      console.error('Error during sign out:', error);
       throw error;
     }
   }
@@ -97,7 +94,6 @@ export class AuthService {
       }
       return updatedUser;
     } catch (error) {
-      console.error('Error updating user:', error);
       throw error;
     }
   }
@@ -118,7 +114,6 @@ export class AuthService {
 
       return updatedUser;
     } catch (error) {
-      console.error('Error connecting XRPL wallet:', error);
       throw error;
     }
   }

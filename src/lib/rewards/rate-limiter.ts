@@ -1,8 +1,4 @@
-import { User } from '../types';
-
-const RATE_LIMIT_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
-const RATE_LIMIT_STORAGE_KEY = 'kleo_rate_limit';
-
+// Simple rate limiter with basic cooldown
 interface RateLimitData {
   [walletAddress: string]: {
     lastPostTime: number;
@@ -15,27 +11,22 @@ interface RateLimitInfo {
   lastPostTime?: number;
 }
 
-export class RateLimiterService {
-  private static instance: RateLimiterService;
+class SimpleRateLimiter {
+  private static instance: SimpleRateLimiter;
+  private rateLimitMap: RateLimitData = {};
+  private cooldownMs: number = 10 * 60 * 1000; // 10 minutes
 
-  static getInstance(): RateLimiterService {
-    if (!RateLimiterService.instance) {
-      RateLimiterService.instance = new RateLimiterService();
+  static getInstance(): SimpleRateLimiter {
+    if (!SimpleRateLimiter.instance) {
+      SimpleRateLimiter.instance = new SimpleRateLimiter();
     }
-    return RateLimiterService.instance;
+    return SimpleRateLimiter.instance;
   }
 
   // Check if user can post
-  canPost(walletAddress: string): RateLimitInfo {
-    if (!walletAddress) {
-      return {
-        canPost: false,
-        timeRemaining: 0
-      };
-    }
-
-    const rateLimitData = this.getRateLimitData();
-    const userData = rateLimitData[walletAddress];
+  canUserPost(walletAddress: string): RateLimitInfo {
+    const now = Date.now();
+    const userData = this.rateLimitMap[walletAddress];
     
     if (!userData) {
       return {
@@ -44,69 +35,55 @@ export class RateLimiterService {
       };
     }
 
-    const timeSinceLastPost = Date.now() - userData.lastPostTime;
-    const timeRemaining = Math.max(0, RATE_LIMIT_DURATION - timeSinceLastPost);
-    
+    const timeSinceLastPost = now - userData.lastPostTime;
+    const timeRemaining = Math.max(0, this.cooldownMs - timeSinceLastPost);
+    const canPost = timeRemaining === 0;
+
     return {
-      canPost: timeRemaining <= 0,
+      canPost,
       timeRemaining,
       lastPostTime: userData.lastPostTime
     };
   }
 
-  // Record a post submission
+  // Record a post
   recordPost(walletAddress: string): void {
-    if (!walletAddress) return;
-
-    const rateLimitData = this.getRateLimitData();
-    rateLimitData[walletAddress] = {
+    this.rateLimitMap[walletAddress] = {
       lastPostTime: Date.now()
     };
-    
-    this.saveRateLimitData(rateLimitData);
   }
 
-  // Get formatted time remaining
-  getFormattedTimeRemaining(timeRemaining: number): string {
-    if (timeRemaining <= 0) return '0:00';
-    
-    const minutes = Math.floor(timeRemaining / 60000);
-    const seconds = Math.floor((timeRemaining % 60000) / 1000);
-    
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  // Get remaining time for user
+  getTimeRemaining(walletAddress: string): number {
+    const userData = this.rateLimitMap[walletAddress];
+    if (!userData) return 0;
+
+    const now = Date.now();
+    const timeSinceLastPost = now - userData.lastPostTime;
+    return Math.max(0, this.cooldownMs - timeSinceLastPost);
   }
 
-  // Clear rate limit for a wallet (for testing)
+  // Clear rate limit for a user (useful for testing)
   clearRateLimit(walletAddress: string): void {
-    if (!walletAddress) return;
-
-    const rateLimitData = this.getRateLimitData();
-    delete rateLimitData[walletAddress];
-    this.saveRateLimitData(rateLimitData);
+    delete this.rateLimitMap[walletAddress];
   }
 
-  private getRateLimitData(): RateLimitData {
-    if (typeof window === 'undefined') return {};
-    
-    try {
-      const stored = localStorage.getItem(RATE_LIMIT_STORAGE_KEY);
-      return stored ? JSON.parse(stored) : {};
-    } catch (error) {
-      console.error('Error loading rate limit data:', error);
-      return {};
-    }
+  // Clear all rate limits
+  clearAllRateLimits(): void {
+    this.rateLimitMap = {};
   }
 
-  private saveRateLimitData(data: RateLimitData): void {
-    if (typeof window === 'undefined') return;
-    
-    try {
-      localStorage.setItem(RATE_LIMIT_STORAGE_KEY, JSON.stringify(data));
-    } catch (error) {
-      console.error('Error saving rate limit data:', error);
-    }
+  // Set custom cooldown time
+  setCooldownTime(ms: number): void {
+    this.cooldownMs = ms;
   }
 }
 
 // Export singleton instance
-export const rateLimiterService = RateLimiterService.getInstance(); 
+export const simpleRateLimiter = SimpleRateLimiter.getInstance();
+
+// Export alias for compatibility with existing code
+export const rateLimiterService = simpleRateLimiter;
+
+// Export types for compatibility
+export type { RateLimitInfo }; 

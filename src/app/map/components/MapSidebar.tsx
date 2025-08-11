@@ -5,7 +5,6 @@ import { KleoPost } from '@/lib/types';
 
 const StoryFeed = dynamic(() => import('./StoryFeed'), { ssr: false, loading: () => <div className="p-4 text-sm text-gray-500">Loading feed…</div> });
 const UserPanel = dynamic(() => import('./UserPanel'), { ssr: false, loading: () => <div className="p-4 text-sm text-gray-500">Loading profile…</div> });
-const Leaderboard = dynamic(() => import('./Leaderboard'), { ssr: false, loading: () => <div className="p-4 text-sm text-gray-500">Loading leaderboard…</div> });
 
 interface MapSidebarProps {
   showStoryFeed: boolean;
@@ -13,8 +12,10 @@ interface MapSidebarProps {
   selectedTag: string;
   selectedType: string;
   posts?: KleoPost[];
-  onPostClick: (post: KleoPost) => void;
-  onFilterChange: (filters: { tag?: string; type?: string }) => void;
+  onPostClick: (_post: KleoPost) => void;
+  onFilterChange: (_filters: { tag?: string; type?: string }) => void;
+  onCloseFeed?: () => void;
+  onCloseUserPanel?: () => void;
 }
 
 export default function MapSidebar({
@@ -24,22 +25,38 @@ export default function MapSidebar({
   selectedType,
   posts = [],
   onPostClick,
-  onFilterChange
+  onFilterChange,
+  onCloseFeed,
+  onCloseUserPanel
 }: MapSidebarProps) {
   if (!showStoryFeed && !showUserPanel) {
     return null;
   }
 
   return (
-    <div className="w-1/3 h-full bg-white border-l border-gray-200 flex flex-col">
+    <div className="w-96 h-full bg-gray-900/95 backdrop-blur-md shadow-2xl flex flex-col overflow-hidden sidebar-transition">
       {showUserPanel && (
-        <div className="p-4 border-b border-gray-200">
+        <div className="p-4 border-b border-gray-700 relative">
+          <button
+            onClick={onCloseUserPanel}
+            className="absolute top-2 right-2 p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+            aria-label="Close user panel"
+          >
+            ✕
+          </button>
           <UserPanel />
         </div>
       )}
 
       {showStoryFeed && (
-        <div className="flex-1">
+        <div className="flex-1 overflow-y-auto feed-container relative">
+          <button
+            onClick={onCloseFeed}
+            className="absolute top-2 right-2 p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors z-10"
+            aria-label="Close feed"
+          >
+            ✕
+          </button>
           <StoryFeed
             posts={posts}
             onPostClick={onPostClick}

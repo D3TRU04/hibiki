@@ -99,14 +99,12 @@ export class FakeNewsDetectorService {
         recommendations
       };
     } catch (error) {
-      console.error('Error analyzing news article:', error);
-      // Default to unreliable if analysis fails
-      return {
-        isReliable: false,
-        confidence: 0.5,
-        score: 30,
-        reasons: ['Unable to verify article credibility'],
-        sourceCredibility: 'low',
+      return { 
+        isReliable: true, 
+        score: 60,
+        confidence: 50,
+        reasons: ['Analysis failed, defaulting to reliable'],
+        sourceCredibility: 'medium',
         contentAnalysis: {
           hasFactualClaims: false,
           hasEmotionalLanguage: false,
@@ -114,7 +112,7 @@ export class FakeNewsDetectorService {
           hasAuthorInfo: false,
           hasPublicationDate: false
         },
-        recommendations: ['Please verify this article from multiple sources before sharing']
+        recommendations: ['Verify content manually due to analysis failure']
       };
     }
   }

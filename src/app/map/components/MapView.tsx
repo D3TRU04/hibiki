@@ -1,21 +1,14 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { KleoPost, Post, Wallet as KleoWallet } from '@/lib/types';
+import { KleoPost, Post } from '@/lib/types';
 import { useMap } from '@/hooks/useMap';
 import { useDynamicWallet } from '@/hooks/useDynamicWallet';
 import GlassyNavbar from '@/components/GlassyNavbar';
 import dynamic from 'next/dynamic';
 import type { Map as MapboxMap } from 'mapbox-gl';
-import { withRetry } from '@/lib/dynamicRetry';
 
-type MapContainerProps = { posts: KleoPost[]; onMapClick: (lat: number, lng: number) => void; onMapReady?: (map: MapboxMap) => void };
-const MapContainer = dynamic<MapContainerProps>(withRetry(() => import('./MapContainer')), { ssr: false, loading: () => <div className="w-full h-full flex items-center justify-center text-white">Loading map…</div> });
-
-type MapSidebarProps = { showStoryFeed: boolean; showUserPanel: boolean; selectedTag: string; selectedType: string; posts?: KleoPost[]; onPostClick: (post: KleoPost) => void; onFilterChange: (filters: { tag?: string; type?: string }) => void };
-const MapSidebar = dynamic<MapSidebarProps>(withRetry(() => import('./MapSidebar')), { ssr: false, loading: () => null });
-
-type MapModalsProps = { isSubmissionFormOpen: boolean; selectedLocation: { lat: number; lng: number } | null; showAuthModal: boolean; showNFTNotification: boolean; nftMintingData: { tokenId?: string; transactionHash?: string; postCid?: string } | null; wallet: KleoWallet | null; onCloseSubmissionForm: () => void; onCloseAuthModal: () => void; onCloseNFTNotification: () => void; onPostCreated: (post: KleoPost) => void };
-const MapModals = dynamic<MapModalsProps>(withRetry(() => import('./MapModals')), { ssr: false });
-const DynamicProvider = dynamic(withRetry(() => import('@/components/DynamicProvider')), { ssr: false, loading: () => null });
+const MapContainer = dynamic(() => import('./MapContainer'), { ssr: false });
+const MapSidebar = dynamic(() => import('./MapSidebar'), { ssr: false, loading: () => null });
+const MapModals = dynamic(() => import('./MapModals'), { ssr: false });
 
 function MapViewInner() {
   const [isSubmissionFormOpen, setIsSubmissionFormOpen] = useState(false);
@@ -26,21 +19,19 @@ function MapViewInner() {
   const [selectedTag, setSelectedTag] = useState<string>('');
   const [selectedType, setSelectedType] = useState<string>('');
   const [showNFTNotification, setShowNFTNotification] = useState(false);
-  const [nftMintingData, _setNftMintingData] = useState<{ tokenId?: string; transactionHash?: string; postCid?: string; } | null>(null);
-  const [isMapReady, setIsMapReady] = useState(false);
+  const [nftMintingData] = useState<{ tokenId?: string; transactionHash?: string; postCid?: string; } | null>(null);
   const [pendingShare, setPendingShare] = useState(false);
 
   const { wallet, isConnected, disconnect } = useDynamicWallet();
-  const { map, setMap, posts, setPosts, isLoading, loadPosts } = useMap();
+  const { map, setMap, posts, setPosts, loadPosts } = useMap();
 
   // Disable map click for submission; use navbar instead
-  const handleMapClick = useCallback((_lat: number, _lng: number) => {
+  const handleMapClick = useCallback(() => {
     // no-op; submissions start from the navbar
   }, []);
 
   const handleMapReady = useCallback((mapInstance: MapboxMap) => {
     setMap(mapInstance);
-    setIsMapReady(true);
     // Defer data load slightly to let tiles appear
     setTimeout(() => { void loadPosts(); }, 0);
   }, [setMap, loadPosts]);
@@ -57,7 +48,7 @@ function MapViewInner() {
   }, [isConnected, wallet]);
 
   const handlePostCreated = useCallback((newPost: KleoPost) => {
-    const post: Post = {
+    const newPostData: Post = {
       id: newPost.id,
       user_id: newPost.user_id,
       type: newPost.type === 'video' ? 'video' : 'text',
@@ -72,7 +63,7 @@ function MapViewInner() {
       created_at: newPost.created_at,
       updated_at: newPost.updated_at,
     };
-    setPosts(prev => [post, ...prev]);
+    setPosts(prev => [newPostData, ...prev]);
     // Optional NFT notification hook left unchanged
   }, [setPosts]);
 
@@ -118,34 +109,73 @@ function MapViewInner() {
     }
   }, [pendingShare, isConnected, wallet]);
 
-  const navWallet: KleoWallet | null = isConnected && wallet ? wallet : null;
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showStoryFeed) setShowStoryFeed(false);
+        if (showUserPanel) setShowUserPanel(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showStoryFeed, showUserPanel]);
+
+  // Improved feed toggle with better state management
+  const handleToggleFeed = useCallback(() => {
+    setShowStoryFeed(prev => !prev);
+    // Close user panel when opening feed to avoid conflicts
+    if (showUserPanel) {
+      setShowUserPanel(false);
+    }
+  }, [showUserPanel]);
+
+  const handleToggleUserPanel = useCallback(() => {
+    setShowUserPanel(prev => !prev);
+    // Close feed when opening user panel to avoid conflicts
+    if (showStoryFeed) {
+      setShowStoryFeed(false);
+    }
+  }, [showStoryFeed]);
 
   return (
     <div className="h-screen w-screen relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      
       <GlassyNavbar
         onAddStory={handleAddStory}
         onAuthClick={connectClick}
-        onToggleFeed={() => setShowStoryFeed(!showStoryFeed)}
-        onToggleUserPanel={() => setShowUserPanel(!showUserPanel)}
-        isAuthenticated={!!navWallet}
-        wallet={navWallet}
+        onToggleFeed={handleToggleFeed}
+        onToggleUserPanel={handleToggleUserPanel}
+        isAuthenticated={isConnected}
+        wallet={wallet}
         onDisconnect={disconnect}
+        showStoryFeed={showStoryFeed}
+        showUserPanel={showUserPanel}
+        postCount={posts.length}
       />
-      <div className="pt-16 h-full relative z-10 flex">
-        <div className={`relative transition-all duration-300 ${showStoryFeed || showUserPanel ? 'w-2/3' : 'w-full'}`}>
+      
+      <div className="pt-16 h-full relative z-10">
+        <div className="relative w-full h-full">
           <MapContainer onMapClick={handleMapClick} onMapReady={handleMapReady} posts={mapPosts} />
+          
+          {/* Sidebar as overlay */}
+          {(showStoryFeed || showUserPanel) && (
+            <div className="absolute top-0 right-0 h-full z-20 sidebar-enter">
+              <MapSidebar
+                showStoryFeed={showStoryFeed}
+                showUserPanel={showUserPanel}
+                selectedTag={selectedTag}
+                selectedType={selectedType}
+                posts={mapPosts}
+                onPostClick={handlePostClick}
+                onFilterChange={handleFilterChange}
+                onCloseFeed={() => setShowStoryFeed(false)}
+                onCloseUserPanel={() => setShowUserPanel(false)}
+              />
+            </div>
+          )}
         </div>
-        {isMapReady && (
-          <MapSidebar
-            showStoryFeed={showStoryFeed}
-            showUserPanel={showUserPanel}
-            selectedTag={selectedTag}
-            selectedType={selectedType}
-            posts={mapPosts}
-            onPostClick={handlePostClick}
-            onFilterChange={handleFilterChange}
-          />
-        )}
       </div>
       <MapModals
         isSubmissionFormOpen={isSubmissionFormOpen}
@@ -164,9 +194,5 @@ function MapViewInner() {
 }
 
 export default function MapView() {
-  return (
-    <DynamicProvider>
-      <MapViewInner />
-    </DynamicProvider>
-  );
+  return <MapViewInner />;
 } 

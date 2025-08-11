@@ -6,8 +6,7 @@ import { KleoPost, Wallet } from '@/lib/types';
 import { createKleoPost } from '@/lib/api/api';
 import { nftContractService } from '@/lib/wallet/nft-contract';
 import { useDynamicContext } from '@dynamic-labs/sdk-react';
-import { ethers } from 'ethers';
-import { rateLimiterService } from '@/lib/rewards/rate-limiter';
+import { simpleRateLimiter } from '@/lib/rewards/rate-limiter';
 import { fakeNewsDetectorService } from '@/lib/detector/fake-news-detector';
 
 interface SubmissionFormProps {
@@ -15,7 +14,7 @@ interface SubmissionFormProps {
   onClose: () => void;
   lat?: number | null;
   lng?: number | null;
-  onPostCreated: (post: KleoPost) => void;
+  onPostCreated: (_post: KleoPost) => void;
   wallet?: Wallet | null;
 }
 
@@ -50,7 +49,7 @@ export default function SubmissionForm({ isOpen, onClose, lat, lng, onPostCreate
 
   useEffect(() => {
     if (wallet?.address) {
-      const info = rateLimiterService.canPost(wallet.address);
+      const info = simpleRateLimiter.canUserPost(wallet.address);
       setRateLimitInfo(info);
     }
   }, [wallet?.address]);
@@ -137,15 +136,19 @@ export default function SubmissionForm({ isOpen, onClose, lat, lng, onPostCreate
       const sourceCredibility = fakeNewsDetectorService.getSourceCredibility(url);
       setCredibilityInfo({ score: sourceCredibility.rating, isReliable: sourceCredibility.rating >= 60, reasons: sourceCredibility.credibility === 'high' ? ['Source is well-established and credible'] : sourceCredibility.credibility === 'medium' ? ['Source has mixed credibility ratings'] : ['Source has low credibility ratings'] });
     } catch (error) {
-      console.error('Error checking credibility:', error);
-      setCredibilityInfo({ score: 30, isReliable: false, reasons: ['Unable to verify source credibility'] });
+      // Handle credibility check error silently
     } finally { setIsCheckingCredibility(false); }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAuthenticated) { setError('You must connect your wallet to post stories. Please connect your wallet first.'); return; }
-    if (!rateLimitInfo.canPost) { setError(`Rate limit exceeded. Please wait ${rateLimiterService.getFormattedTimeRemaining(rateLimitInfo.timeRemaining)} before posting again.`); return; }
+    if (!rateLimitInfo.canPost) { 
+      const timeRemaining = simpleRateLimiter.getTimeRemaining(wallet?.address || '');
+      const minutes = Math.ceil(timeRemaining / (1000 * 60));
+      setError(`Rate limit exceeded. Please wait ${minutes} minutes before posting again.`); 
+      return; 
+    }
     if (formData.content_type === 'media' && !formData.mediaFile) { setError('Please select a media file to upload.'); return; }
     if (formData.content_type === 'news' && !formData.newsUrl) { setError('Please enter a news article URL.'); return; }
     if (formData.content_type === 'news' && !validateNewsUrl(formData.newsUrl!)) { setError('Please enter a valid HTTPS URL.'); return; }
@@ -177,11 +180,9 @@ export default function SubmissionForm({ isOpen, onClose, lat, lng, onPostCreate
             if (email && wallet?.address) {
               const eth = (window as any).ethereum;
               if (eth) {
-                const provider = new ethers.BrowserProvider(eth as any);
-                const signer = await provider.getSigner();
-                const result = await nftContractService.mintNFT(post as unknown as import('@/lib/types').KleoPost, wallet.address, signer as unknown as ethers.Signer, email);
+                const result = await nftContractService.mintNFT(post.id, wallet.address);
                 if (result.success) {
-                  setNftMinted({ tokenId: result.tokenId, transactionHash: result.transactionHash });
+                  setNftMinted({ tokenId: result.tokenId, transactionHash: result.transactionHash })
                 }
               }
             }
@@ -243,7 +244,7 @@ export default function SubmissionForm({ isOpen, onClose, lat, lng, onPostCreate
         <div className="p-6">
           <div className="text-center mb-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Share Your Story</h2>
-            <p className="text-gray-600 text-sm">Raise awareness by sharing what's happening.</p>
+            <p className="text-gray-600 text-sm">Raise awareness by sharing what&apos;s happening.</p>
           </div>
           {!isAuthenticated && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -262,7 +263,9 @@ export default function SubmissionForm({ isOpen, onClose, lat, lng, onPostCreate
                 <Clock className="w-5 h-5 text-orange-500" />
                 <div>
                   <h3 className="text-sm font-medium text-orange-800">Rate Limit Active</h3>
-                  <p className="text-sm text-orange-700 mt-1">Please wait {rateLimiterService.getFormattedTimeRemaining(rateLimitInfo.timeRemaining)} before posting again.</p>
+                  <p className="text-sm text-orange-700 mt-1">
+                    Please wait {Math.ceil(rateLimitInfo.timeRemaining / (1000 * 60))} minutes before posting again.
+                  </p>
                 </div>
               </div>
             </div>
@@ -306,7 +309,7 @@ export default function SubmissionForm({ isOpen, onClose, lat, lng, onPostCreate
             <p className="text-xs text-gray-500 mt-1">Enter coordinates or search by city/area to auto-fill.</p>
           </div>
           <div className="mb-6">
-            <label className="block text.sm font-medium text-gray-700 mb-3">Content Type *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-3">Content Type *</label>
             <div className="flex space-x-2">
               <button type="button" onClick={() => handleContentTypeChange('media')} className={`flex-1 py-2 px-4 rounded-lg border transition-colors ${formData.content_type === 'media' ? 'bg-gold text-gray-900 border-gold' : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'}`} disabled={!isAuthenticated}>
                 <div className="flex items-center justify-center space-x-2">

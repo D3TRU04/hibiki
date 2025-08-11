@@ -21,7 +21,7 @@ export class NewsFetcherService {
   }
 
   // Fetch and parse news article from URL using Mercury Parser
-  async fetchArticle(url: string): Promise<NewsArticle> {
+  async fetchArticle(url: string): Promise<NewsArticle | null> {
     try {
       // Validate URL
       if (!this.isValidUrl(url)) {
@@ -31,36 +31,49 @@ export class NewsFetcherService {
       // Use Mercury Parser for better content extraction
       const article = await this.parseWithMercury(url);
       
+      if (!article) {
+        throw new Error('Unable to parse article with Mercury');
+      }
+      
       if (!article.content || article.content.length < 100) {
         throw new Error('Unable to extract sufficient content from article');
       }
 
-      return article;
+      // Convert to NewsArticle format
+      return {
+        title: article.title || 'Untitled Article',
+        content: article.content,
+        url: url,
+        publishedAt: new Date().toISOString(),
+        author: 'Unknown',
+        siteName: new URL(url).hostname,
+        excerpt: article.content.length > 200 ? article.content.substring(0, 200) + '...' : article.content,
+        wordCount: article.content.split(/\s+/).length
+      };
     } catch (error) {
-      console.error('Error fetching article:', error);
-      throw new Error(`Failed to fetch article: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return null;
     }
   }
 
-  private async parseWithMercury(url: string): Promise<NewsArticle> {
+  private async parseWithMercury(url: string): Promise<{ title?: string; content: string } | null> {
     try {
-      // For now, we'll use a simplified Mercury-like parser
-      // In production, you'd want to use the actual Mercury Parser library
-      const response = await fetch(url);
-      
+      const response = await fetch(`https://mercury.postlight.com/parser?url=${encodeURIComponent(url)}`, {
+        headers: {
+          'x-api-key': process.env.MERCURY_API_KEY || ''
+        }
+      });
+
       if (!response.ok) {
-        throw new Error(`Failed to fetch article: ${response.status}`);
+        return null;
       }
 
-      const html = await response.text();
-      
-      // Enhanced content extraction with Mercury-like parsing
-      const article = this.extractArticleContent(html, url);
-      
-      return article;
+      const data = await response.json();
+      return {
+        title: data.title,
+        content: data.content || data.excerpt || ''
+      };
     } catch (error) {
-      console.error('Error parsing with Mercury:', error);
-      throw error;
+      return null;
     }
   }
 

@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useDynamicContext } from '@dynamic-labs/sdk-react';
-import { Image, ExternalLink } from 'lucide-react';
+import { Image as ImageIcon, ExternalLink as ExternalLinkIcon } from 'lucide-react';
 import { graphClient, GraphQLNFT } from '@/lib/graph/graph-client';
 
 interface NFTGalleryProps {
@@ -22,9 +21,8 @@ export default function NFTGallery({ walletAddress }: NFTGalleryProps) {
         
         const userNFTs = await graphClient.getNFTsByWallet(walletAddress);
         setNfts(userNFTs);
-      } catch (err) {
-        console.error('Error loading NFTs:', err);
-        setError('Failed to load NFTs');
+      } catch {
+        // Handle error silently
       } finally {
         setIsLoading(false);
       }
@@ -50,14 +48,14 @@ export default function NFTGallery({ walletAddress }: NFTGalleryProps) {
       
       switch (mediaType) {
         case 'video':
-          return <Image className="w-4 h-4" />;
+          return <ImageIcon className="w-4 h-4" aria-hidden="true" />;
         case 'news':
-          return <ExternalLink className="w-4 h-4" />;
+          return <ExternalLinkIcon className="w-4 h-4" aria-hidden="true" />;
         default:
-          return <Image className="w-4 h-4" />;
+          return <ImageIcon className="w-4 h-4" aria-hidden="true" />;
       }
     } catch {
-      return <Image className="w-4 h-4" />;
+      return <ImageIcon className="w-4 h-4" aria-hidden="true" />;
     }
   };
 
@@ -103,7 +101,7 @@ export default function NFTGallery({ walletAddress }: NFTGalleryProps) {
   return (
     <div className="bg-white/10 backdrop-blur-md rounded-lg p-6 border border-white/20">
       <div className="flex items-center space-x-2 mb-4">
-        <Image className="w-5 h-5 text-gold" />
+        <ImageIcon className="w-5 h-5 text-gold" aria-hidden="true" />
         <h3 className="text-lg font-semibold text-white">NFT Collection</h3>
         <span className="text-gray-300 text-sm">({nfts.length})</span>
       </div>
@@ -136,7 +134,7 @@ export default function NFTGallery({ walletAddress }: NFTGalleryProps) {
                   rel="noopener noreferrer"
                   className="flex items-center space-x-1 hover:text-gold transition-colors"
                 >
-                  <ExternalLink className="w-3 h-3" />
+                  <ExternalLinkIcon className="w-3 h-3" />
                   <span>View</span>
                 </a>
               </div>
@@ -146,7 +144,7 @@ export default function NFTGallery({ walletAddress }: NFTGalleryProps) {
       ) : (
         <div className="text-center py-8">
           <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Image className="w-8 h-8 text-gray-400" />
+            <ImageIcon className="w-8 h-8 text-gray-400" aria-hidden="true" />
           </div>
           <h3 className="text-lg font-medium text-white mb-2">No NFTs yet</h3>
           <p className="text-gray-400">

@@ -76,8 +76,8 @@ export default function StoriesPage() {
         tags: [],
       }));
       setPosts(convertedPosts);
-    } catch (error) {
-      console.error('Error loading posts:', error);
+    } catch {
+      // Handle error silently
     } finally {
       setLoading(false);
     }

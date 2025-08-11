@@ -1,16 +1,16 @@
 'use client';
 
-import type { ReactNode } from 'react';
 import { DynamicContextProvider } from '@dynamic-labs/sdk-react';
-import { DYNAMIC_CONFIG } from '@/lib/dynamic-auth';
 
-interface Props { children: ReactNode }
+interface Props {
+  children: any;
+}
 
 export default function DynamicProvider({ children }: Props) {
+  const environmentId = process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID || 'demo';
   return (
-    <DynamicContextProvider settings={DYNAMIC_CONFIG}>
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      {children as unknown as any}
+    <DynamicContextProvider settings={{ environmentId }}>
+      {children}
     </DynamicContextProvider>
   );
 } 

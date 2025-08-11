@@ -1,7 +1,7 @@
 import { ipfsStorage } from '../storage/ipfs-storage';
 import { xrplWallet, distributeRewards } from '../wallet/xrpl-wallet';
 import { Post, CreatePostData, User, RewardSystem, XRPLWallet, KleoPost, Wallet, PostSubmission } from '../types';
-import { rateLimiterService } from '../rewards/rate-limiter';
+import { simpleRateLimiter } from '../rewards/rate-limiter';
 
 // Local storage for user session
 const USER_SESSION_KEY = 'kleo_user_session';
@@ -11,15 +11,26 @@ const isBrowser = typeof window !== 'undefined';
 
 // Get crypto object safely
 const getCrypto = () => {
-  if (isBrowser) {
+  if (typeof window !== 'undefined') {
+    // Browser environment
     return window.crypto;
   }
-  // Node.js environment
+  // Node.js environment - use dynamic import to avoid require() issues
   if (typeof global !== 'undefined' && global.crypto) {
     return global.crypto;
   }
   // Fallback for older Node.js versions
-  return require('crypto').webcrypto;
+  try {
+    // Use dynamic import instead of require
+    const crypto = globalThis.crypto || global.crypto;
+    if (crypto) return crypto;
+  } catch {
+    // Fallback to basic crypto if available
+  }
+  // Final fallback
+  return {
+    randomUUID: () => `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  };
 };
 
 // Generate a temporary contributor ID for anonymous submissions
@@ -59,10 +70,9 @@ function generateUUID(): string {
 // Upload file to IPFS
 export async function uploadToIPFS(file: File): Promise<string> {
   try {
-    const cid = await ipfsStorage.uploadFile(file);
+    const cid = await ipfsStorage.uploadMedia(file);
     return `ipfs://${cid}`;
   } catch (error) {
-    console.error('Error uploading to IPFS:', error);
     throw error;
   }
 }
@@ -71,11 +81,9 @@ export async function uploadToIPFS(file: File): Promise<string> {
 export async function getPosts(filters?: { tag?: string; type?: string }): Promise<KleoPost[]> {
   try {
     // Sync from Pinata to ensure we have the latest posts
-    console.log('🔄 Syncing posts from Pinata...');
     await ipfsStorage.syncFromPinata();
     
     const posts = await ipfsStorage.getPosts();
-    console.log(`📊 Retrieved ${posts.length} posts from storage`);
     
     // Convert Post[] to KleoPost[] (align with current KleoPost interface)
     const kleoPosts: KleoPost[] = posts.map((post: Post) => {
@@ -104,9 +112,6 @@ export async function getPosts(filters?: { tag?: string; type?: string }): Promi
       };
     });
 
-    console.log(`🎯 Converted ${kleoPosts.length} posts to KleoPost format`);
-    console.log(`📍 Posts with coordinates:`, kleoPosts.filter(p => p.lat != null && p.lng != null).length);
-
     // Apply filters
     let filteredPosts = kleoPosts;
 
@@ -126,10 +131,8 @@ export async function getPosts(filters?: { tag?: string; type?: string }): Promi
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
     
-    console.log(`✅ Returning ${sortedPosts.length} filtered and sorted posts`);
     return sortedPosts;
   } catch (error) {
-    console.error('Error fetching posts:', error);
     return [];
   }
 }
@@ -145,10 +148,11 @@ export async function createKleoPost(postData: PostSubmission, wallet: Wallet): 
       ]) as T;
     };
     // Rate limiting check
-    const rateInfo = rateLimiterService.canPost(wallet.address);
+    const rateInfo = simpleRateLimiter.canUserPost(wallet.address);
     if (!rateInfo.canPost) {
-      const timeRemaining = rateLimiterService.getFormattedTimeRemaining(rateInfo.timeRemaining);
-      throw new Error(`Rate limit exceeded. Please wait ${timeRemaining} before posting again.`);
+      const timeRemaining = simpleRateLimiter.getTimeRemaining(wallet.address);
+      const minutes = Math.ceil(timeRemaining / (1000 * 60));
+      throw new Error(`Rate limit exceeded. Please wait ${minutes} minutes before posting again.`);
     }
 
     let kleoPost: KleoPost;
@@ -295,7 +299,6 @@ export async function createKleoPost(postData: PostSubmission, wallet: Wallet): 
       const cid = await (await import('../storage/pinata-storage')).pinataStorageService.uploadPost(kleoPost);
       kleoPost.ipfs_metadata_url = `ipfs://${cid}`;
     } catch (e) {
-      console.warn('Pinata upload failed, using local metadata fallback', e);
       kleoPost.ipfs_metadata_url = `local://metadata-${kleoPost.id}.json`;
     }
 
@@ -303,7 +306,7 @@ export async function createKleoPost(postData: PostSubmission, wallet: Wallet): 
     try {
       await ipfsStorage.createPostFromKleo(kleoPost);
     } catch (e) {
-      console.warn('Failed to persist post in global state', e);
+      //
     }
     // Mint NFT from the created post metadata if desired (placeholder seed required in real flow)
     // await (await import('./xrpl-nft')).xrplNFTService.mintFromPostCID(kleoPost, '<WALLET_SEED>');
@@ -318,7 +321,6 @@ export async function createKleoPost(postData: PostSubmission, wallet: Wallet): 
     return kleoPost;
 
   } catch (error) {
-    console.error('Error creating Kleo post:', error);
     throw error;
   }
 }
@@ -339,7 +341,6 @@ export async function getCurrentUser(): Promise<User | null> {
     }
     return null;
   } catch (error) {
-    console.error('Error getting current user:', error);
     return null;
   }
 }
@@ -355,7 +356,6 @@ export async function createUser(userData: Partial<User>): Promise<User> {
     
     return user;
   } catch (error) {
-    console.error('Error creating user:', error);
     throw error;
   }
 }
@@ -371,7 +371,6 @@ export async function updateUser(userId: string, updates: Partial<User>): Promis
     
     return user;
   } catch (error) {
-    console.error('Error updating user:', error);
     return null;
   }
 }
@@ -395,13 +394,11 @@ export async function createPost(postData: CreatePostData): Promise<Post | null>
     const post = await ipfsStorage.createPost(postData, user);
     
     if (post) {
-      console.log('Post created successfully:', post.id);
-      console.log('Points earned:', post.user?.contribution_points);
+      //
     }
     
     return post;
   } catch (error) {
-    console.error('Error creating post:', error);
     throw error;
   }
 }
@@ -410,7 +407,6 @@ export async function getRewardSystem(userId: string): Promise<RewardSystem | nu
   try {
     return await ipfsStorage.getRewardSystem(userId);
   } catch (error) {
-    console.error('Error getting reward system:', error);
     return null;
   }
 }
@@ -420,7 +416,6 @@ export async function generateWallet(): Promise<XRPLWallet> {
   try {
     return await xrplWallet.generateWallet();
   } catch (error) {
-    console.error('Error generating wallet:', error);
     throw error;
   }
 }
@@ -429,7 +424,6 @@ export async function importWallet(seed: string): Promise<XRPLWallet> {
   try {
     return await xrplWallet.importWallet(seed);
   } catch (error) {
-    console.error('Error importing wallet:', error);
     throw error;
   }
 }
@@ -438,7 +432,6 @@ export async function getWalletBalance(address: string): Promise<number> {
   try {
     return await xrplWallet.getBalance(address);
   } catch (error) {
-    console.error('Error getting wallet balance:', error);
     return 0;
   }
 }
@@ -461,22 +454,11 @@ export async function claimRewards(userId: string): Promise<boolean> {
     if (success) {
       // Reset contribution points after successful reward distribution
       await updateUser(userId, { contribution_points: 0 });
-      console.log('Rewards claimed successfully');
     }
     
     return success;
   } catch (error) {
-    console.error('Error claiming rewards:', error);
     throw error;
-  }
-}
-
-export async function getFaucetFunds(address: string): Promise<boolean> {
-  try {
-    return await xrplWallet.getFaucetFunds(address);
-  } catch (error) {
-    console.error('Error getting faucet funds:', error);
-    return false;
   }
 }
 
@@ -484,15 +466,13 @@ export async function getFaucetFunds(address: string): Promise<boolean> {
 export async function addPostToGlobalState(post: Post): Promise<void> {
   try {
     await ipfsStorage.addPostToGlobalState(post);
-    console.log(`✅ Post ${post.id} manually added to global state`);
   } catch (error) {
-    console.error(`❌ Failed to manually add post ${post.id}:`, error);
+    //
   }
 }
 
 // Legacy function for backward compatibility
 export async function uploadAudioFile(): Promise<string | null> {
-  console.warn('uploadAudioFile is deprecated. Use createPost with IPFS instead.');
   return null;
 } 
 
@@ -511,10 +491,8 @@ async function _getXRPLWalletSeed(walletAddress: string): Promise<string | null>
     
     // For MVP, you can implement wallet generation or import here
     // This is a placeholder - you'll need to integrate with your wallet system
-    console.log('⚠️ XRPL wallet seed not found for address:', walletAddress);
     return null;
   } catch (error) {
-    console.error('❌ Error getting XRPL wallet seed:', error);
     return null;
   }
 } 

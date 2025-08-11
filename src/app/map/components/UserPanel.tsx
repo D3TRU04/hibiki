@@ -42,7 +42,8 @@ export default function UserPanel() {
           </p>
           <button
             onClick={() => {
-              alert('Please use the Connect Wallet button in the header to connect your wallet.');
+              // TODO: Implement proper wallet connection flow
+              // For now, silently handle the connection request
             }}
             className="w-full px-4 py-2 bg-gold text-white rounded-lg hover:bg-yellow-500 transition-colors"
           >
@@ -55,7 +56,11 @@ export default function UserPanel() {
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-4">
-      <UserPanelHeader onDisconnect={handleDisconnect} />
+      <UserPanelHeader 
+        wallet={wallet} 
+        onDisconnect={handleDisconnect} 
+        onToggleUserPanel={() => setShowDetails(!showDetails)}
+      />
       <UserPanelDetails />
       {wallet && (
         <div className="mb-4">

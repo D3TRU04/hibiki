@@ -58,6 +58,11 @@ export interface GraphQLGlobalStats {
 
 export class GraphClient {
   private static instance: GraphClient;
+  private subgraphUrl: string;
+
+  constructor() {
+    this.subgraphUrl = process.env.NEXT_PUBLIC_SUBGRAPH_URL || 'https://api.thegraph.com/subgraphs/name/your-subgraph';
+  }
 
   static getInstance(): GraphClient {
     if (!GraphClient.instance) {
@@ -68,303 +73,259 @@ export class GraphClient {
 
   // Query all posts with pagination
   async getPosts(first: number = 10, skip: number = 0): Promise<GraphQLPost[]> {
-    const query = `
-      query GetPosts($first: Int!, $skip: Int!) {
-        postSubmitteds(
-          first: $first
-          skip: $skip
-          orderBy: timestamp
-          orderDirection: desc
-        ) {
-          id
-          post_cid
-          wallet
-          timestamp
-          media_type
-          source_url
-          summary_text
-          reward_points
-          lat
-          lng
-          is_reliable
-          credibility_score
-          contributor_id
-        }
-      }
-    `;
-
     try {
-      const response = await this.executeQuery(query, { first, skip });
-      const items = (response.data as unknown as { postSubmitteds?: GraphQLPost[] }).postSubmitteds;
-      return Array.isArray(items) ? items : [];
+      const response = await this.executeQuery(`
+        query GetPosts($first: Int!, $skip: Int!) {
+          posts(first: $first, skip: $skip, orderBy: createdAt, orderDirection: desc) {
+            id
+            content
+            mediaType
+            ipfsHash
+            createdAt
+            user {
+              id
+              wallet
+            }
+          }
+        }
+      `, { first, skip });
+
+      return response?.posts || [];
     } catch (error) {
-      console.error('Error fetching posts from subgraph:', error);
       return [];
     }
   }
 
   // Query posts by media type
   async getPostsByMediaType(mediaType: string, first: number = 10): Promise<GraphQLPost[]> {
-    const query = `
-      query GetPostsByMediaType($mediaType: String!, $first: Int!) {
-        postSubmitteds(
-          where: { media_type: $mediaType }
-          first: $first
-          orderBy: timestamp
-          orderDirection: desc
-        ) {
-          id
-          post_cid
-          wallet
-          timestamp
-          media_type
-          source_url
-          summary_text
-          reward_points
-          lat
-          lng
-          is_reliable
-          credibility_score
-          contributor_id
-        }
-      }
-    `;
-
     try {
-      const response = await this.executeQuery(query, { mediaType, first });
-      const items = (response.data as unknown as { postSubmitteds?: GraphQLPost[] }).postSubmitteds;
-      return Array.isArray(items) ? items : [];
+      const response = await this.executeQuery(`
+        query GetPostsByMediaType($mediaType: String!, $first: Int!) {
+          posts(where: { mediaType: $mediaType }, first: $first, orderBy: createdAt, orderDirection: desc) {
+            id
+            content
+            mediaType
+            ipfsHash
+            createdAt
+            user {
+              id
+              wallet
+            }
+          }
+        }
+      `, { mediaType, first });
+
+      return response?.posts || [];
     } catch (error) {
-      console.error('Error fetching posts by media type:', error);
       return [];
     }
   }
 
   // Query posts by wallet address
-  async getPostsByWallet(wallet: string): Promise<GraphQLPost[]> {
-    const query = `
-      query GetPostsByWallet($wallet: String!) {
-        postSubmitteds(
-          where: { wallet: $wallet }
-          orderBy: timestamp
-          orderDirection: desc
-        ) {
-          id
-          post_cid
-          wallet
-          timestamp
-          media_type
-          source_url
-          summary_text
-          reward_points
-          lat
-          lng
-          is_reliable
-          credibility_score
-          contributor_id
-        }
-      }
-    `;
-
+  async getPostsByWallet(wallet: string, first: number = 10): Promise<GraphQLPost[]> {
     try {
-      const response = await this.executeQuery(query, { wallet });
-      const items = (response.data as unknown as { postSubmitteds?: GraphQLPost[] }).postSubmitteds;
-      return Array.isArray(items) ? items : [];
+      const response = await this.executeQuery(`
+        query GetPostsByWallet($wallet: String!) {
+          posts(where: { user: $wallet }, first: $first, orderBy: createdAt, orderDirection: desc) {
+            id
+            content
+            mediaType
+            ipfsHash
+            createdAt
+            user {
+              id
+              wallet
+            }
+          }
+        }
+      `, { wallet, first });
+
+      return response?.posts || [];
     } catch (error) {
-      console.error('Error fetching posts by wallet:', error);
       return [];
     }
   }
 
   // Query NFTs by wallet
-  async getNFTsByWallet(wallet: string): Promise<GraphQLNFT[]> {
-    const query = `
-      query GetNFTsByWallet($wallet: String!) {
-        nftMinteds(
-          where: { wallet: $wallet }
-          orderBy: timestamp
-          orderDirection: desc
-        ) {
-          id
-          token_id
-          post_cid
-          wallet
-          timestamp
-          transaction_hash
-          metadata
-        }
-      }
-    `;
-
+  async getNFTsByWallet(wallet: string, first: number = 10): Promise<GraphQLNFT[]> {
     try {
-      const response = await this.executeQuery(query, { wallet });
-      const items = (response.data as unknown as { nftMinteds?: GraphQLNFT[] }).nftMinteds;
-      return Array.isArray(items) ? items : [];
+      const response = await this.executeQuery(`
+        query GetNFTsByWallet($wallet: String!) {
+          nfts(where: { owner: $wallet }, first: $first, orderBy: createdAt, orderDirection: desc) {
+            id
+            tokenId
+            post {
+              id
+              content
+              ipfsHash
+            }
+            owner
+            createdAt
+          }
+        }
+      `, { wallet, first });
+
+      return response?.nfts || [];
     } catch (error) {
-      console.error('Error fetching NFTs by wallet:', error);
       return [];
     }
   }
 
   // Query rewards by wallet
-  async getRewardsByWallet(wallet: string): Promise<GraphQLReward[]> {
-    const query = `
-      query GetRewardsByWallet($wallet: String!) {
-        rewardClaimeds(
-          where: { wallet: $wallet }
-          orderBy: timestamp
-          orderDirection: desc
-        ) {
-          id
-          wallet
-          amount
-          total_xp
-          timestamp
-          transaction_hash
-        }
-      }
-    `;
-
+  async getRewardsByWallet(wallet: string, first: number = 10): Promise<GraphQLReward[]> {
     try {
-      const response = await this.executeQuery(query, { wallet });
-      const items = (response.data as unknown as { rewardClaimeds?: GraphQLReward[] }).rewardClaimeds;
-      return Array.isArray(items) ? items : [];
+      const response = await this.executeQuery(`
+        query GetRewardsByWallet($wallet: String!) {
+          rewards(where: { user: $wallet }, first: $first, orderBy: createdAt, orderDirection: desc) {
+            id
+            amount
+            reason
+            createdAt
+            user {
+              id
+              wallet
+            }
+          }
+        }
+      `, { wallet, first });
+
+      return response?.rewards || [];
     } catch (error) {
-      console.error('Error fetching rewards by wallet:', error);
       return [];
     }
   }
 
   // Query user profile
   async getUserProfile(wallet: string): Promise<GraphQLUser | null> {
-    const query = `
-      query GetUserProfile($wallet: String!) {
-        user(id: $wallet) {
-          id
-          wallet
-          total_xp
-          total_posts
-          total_nfts
-          total_rewards_claimed
-          last_activity
-        }
-      }
-    `;
-
     try {
-      const response = await this.executeQuery(query, { wallet });
-      const item = (response.data as unknown as { user?: GraphQLUser }).user;
-      return (item ?? null);
+      const response = await this.executeQuery(`
+        query GetUserProfile($wallet: String!) {
+          user(id: $wallet) {
+            id
+            wallet
+            contributionPoints
+            totalPosts
+            totalRewards
+            createdAt
+          }
+        }
+      `, { wallet });
+
+      return response?.user || null;
     } catch (error) {
-      console.error('Error fetching user profile:', error);
       return null;
     }
   }
 
   // Query global stats
   async getGlobalStats(): Promise<GraphQLGlobalStats | null> {
-    const query = `
-      query GetGlobalStats {
-        globalStats(id: "kleo-global-stats") {
-          id
-          total_posts
-          total_nfts
-          total_rewards_claimed
-          total_xp_distributed
-          unique_users
-          last_updated
-        }
-      }
-    `;
-
     try {
-      const response = await this.executeQuery(query);
-      const item = (response.data as unknown as { globalStats?: GraphQLGlobalStats }).globalStats;
-      return (item ?? null);
+      const response = await this.executeQuery(`
+        query GetGlobalStats {
+          global(id: "global") {
+            total_posts
+            total_users
+            total_rewards
+            total_nfts
+          }
+        }
+      `);
+
+      return response?.global || {
+        id: 'global',
+        total_posts: 0,
+        unique_users: 0,
+        total_rewards_claimed: 0,
+        total_nfts: 0,
+        total_xp_distributed: 0,
+        last_updated: new Date().toISOString()
+      };
     } catch (error) {
-      console.error('Error fetching global stats:', error);
-      return null;
+      return {
+        id: 'global',
+        total_posts: 0,
+        unique_users: 0,
+        total_rewards_claimed: 0,
+        total_nfts: 0,
+        total_xp_distributed: 0,
+        last_updated: new Date().toISOString()
+      };
     }
   }
 
   // Search posts by summary text (if supported)
-  async searchPosts(searchTerm: string, first: number = 10): Promise<GraphQLPost[]> {
-    const query = `
-      query SearchPosts($searchTerm: String!, $first: Int!) {
-        postSearchs(
-          where: { summary_text_contains: $searchTerm }
-          first: $first
-          orderBy: timestamp
-          orderDirection: desc
-        ) {
-          id
-          post_cid
-          wallet
-          timestamp
-        }
-      }
-    `;
-
+  async searchPosts(query: string, first: number = 10): Promise<GraphQLPost[]> {
     try {
-      const response = await this.executeQuery(query, { searchTerm, first });
-      const items = (response.data as unknown as { postSearchs?: GraphQLPost[] }).postSearchs;
-      return Array.isArray(items) ? items : [];
+      const response = await this.executeQuery(`
+        query SearchPosts($query: String!, $first: Int!) {
+          posts(where: { content_contains_nocase: $query }, first: $first, orderBy: createdAt, orderDirection: desc) {
+            id
+            content
+            mediaType
+            ipfsHash
+            createdAt
+            user {
+              id
+              wallet
+            }
+          }
+        }
+      `, { query, first });
+
+      return response?.posts || [];
     } catch (error) {
-      console.error('Error searching posts:', error);
       return [];
     }
   }
 
   // Get leaderboard by XP
   async getLeaderboard(first: number = 10): Promise<GraphQLUser[]> {
-    const query = `
-      query GetLeaderboard($first: Int!) {
-        users(
-          first: $first
-          orderBy: total_xp
-          orderDirection: desc
-        ) {
-          id
-          wallet
-          total_xp
-          total_posts
-          total_nfts
-          total_rewards_claimed
-          last_activity
-        }
-      }
-    `;
-
     try {
-      const response = await this.executeQuery(query, { first });
-      const items = (response && response.data && (response.data as any).users) as GraphQLUser[] | undefined;
-      return Array.isArray(items) ? items : [];
+      const response = await this.executeQuery(`
+        query GetLeaderboard($first: Int!) {
+          users(first: $first, orderBy: contributionPoints, orderDirection: desc) {
+            id
+            wallet
+            contributionPoints
+            totalPosts
+            totalRewards
+            createdAt
+          }
+        }
+      `, { first });
+
+      return response?.users || [];
     } catch (error) {
-      console.error('Error fetching leaderboard:', error);
       return [];
     }
   }
 
-  private async executeQuery(query: string, variables: Record<string, unknown> = {}): Promise<{ data: { users?: unknown[]; [k: string]: unknown } } | { data: {} }> {
+  private async executeQuery(query: string, variables: Record<string, any> = {}): Promise<any> {
     try {
-      const response = await fetch(GRAPHQL_ENDPOINT, {
+      const response = await fetch(this.subgraphUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, variables }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query,
+          variables,
+        }),
       });
+
       if (!response.ok) {
-        console.warn(`GraphQL request failed: ${response.status} ${response.statusText}`);
-        return { data: {} };
+        return null;
       }
-      const data: { data?: { [k: string]: unknown }; errors?: unknown } = await response.json().catch(() => ({ data: {} }));
-      if (!data || data.errors) {
-        console.warn('GraphQL returned errors or empty');
-        return { data: {} };
+
+      const data = await response.json();
+
+      if (data.errors || !data.data) {
+        return null;
       }
-      return (data as any) as { data: { users?: unknown[]; [k: string]: unknown } };
+
+      return data.data;
     } catch (e) {
-      console.warn('GraphQL executeQuery exception', e);
-      return { data: {} };
+      return null;
     }
   }
 }

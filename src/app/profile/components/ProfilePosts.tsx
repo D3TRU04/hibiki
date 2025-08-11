@@ -1,9 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
 import { GraphQLPost } from '@/lib/graph/graph-client';
-import { MessageSquare, Video, Link as LinkIcon } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 import StoryCard from '@/app/components/StoryCard';
 import { KleoPost } from '@/lib/types';
 
@@ -64,29 +62,6 @@ export default function ProfilePosts({ userPosts, isOwnProfile }: ProfilePostsPr
           </div>
         </div>
       </div>
-
-      {kleoPosts.length > 0 ? (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {kleoPosts.map(post => (
-            <div key={post.id} className="bg-white/10 backdrop-blur-md rounded-lg border border-white/20 hover:border-gold/50 transition-all duration-300">
-              <StoryCard post={post} />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12">
-          <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <MessageSquare className="w-8 h-8 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-medium text-white mb-2">No posts yet</h3>
-          <p className="text-gray-400">
-            {isOwnProfile 
-              ? 'Start sharing stories to see them here!'
-              : 'This user hasn\'t shared any stories yet.'
-            }
-          </p>
-        </div>
-      )}
     </div>
   );
 } 

@@ -1,61 +1,100 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { useParams } from 'next/navigation';
 import { graphClient, GraphQLPost, GraphQLUser } from '@/lib/graph/graph-client';
-import { useDynamicWallet } from '@/hooks/useDynamicWallet';
+import { getPosts } from '@/lib/api/api';
+import type { KleoPost } from '@/lib/types';
+import { dynamicAuthService } from '@/lib/dynamic-auth';
 import ProfileHeader from '@/app/profile/components/ProfileHeader';
 import ProfilePosts from '@/app/profile/components/ProfilePosts';
-import NFTGallery from '@/components/NFTGallery';
 
 export default function ProfilePage() {
   const params = useParams();
-  const router = useRouter();
-  const walletAddress = params.wallet as string;
-  const { wallet: currentWallet, isConnected } = useDynamicWallet();
-  
+  const walletAddress = (params.wallet as string)?.toLowerCase();
+
   const [userProfile, setUserProfile] = useState<GraphQLUser | null>(null);
   const [userPosts, setUserPosts] = useState<GraphQLPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isOwnProfile, setIsOwnProfile] = useState(false);
+  const loadedRef = useRef<string | null>(null);
+  const inFlightRef = useRef(false);
 
-  const handleBack = () => {
-    router.back();
-  };
+  // Set own-profile flag once per wallet
+  useEffect(() => {
+    const current = dynamicAuthService.getCurrentWallet()?.address?.toLowerCase();
+    setIsOwnProfile(!!current && current === walletAddress);
+  }, [walletAddress]);
 
   useEffect(() => {
-    const loadProfileData = async () => {
-      if (!walletAddress) {
-        setError('Invalid wallet address');
-        setIsLoading(false);
-        return;
-      }
+    if (!walletAddress) { setError('Invalid wallet address'); setIsLoading(false); return; }
+    if (loadedRef.current === walletAddress || inFlightRef.current) return;
+    loadedRef.current = walletAddress;
+    inFlightRef.current = true;
 
+    let cancelled = false;
+    async function loadProfileData() {
       try {
         setIsLoading(true);
         setError(null);
 
-        const ownProfile = isConnected && currentWallet?.address.toLowerCase() === walletAddress.toLowerCase();
-        setIsOwnProfile(ownProfile);
+        const [profileFromGraph, postsFromGraph] = await Promise.all([
+          graphClient.getUserProfile(walletAddress),
+          graphClient.getPostsByWallet(walletAddress, 50)
+        ]);
 
-        const profile = await graphClient.getUserProfile(walletAddress);
-        setUserProfile(profile);
+        let posts: GraphQLPost[] = postsFromGraph || [];
+        let profile: GraphQLUser | null = profileFromGraph;
 
-        const posts = await graphClient.getPostsByWallet(walletAddress);
-        setUserPosts(posts);
+        if (!posts.length) {
+          const kleoPosts: KleoPost[] = await getPosts().catch(() => [] as KleoPost[]);
+          const mine = (kleoPosts || []).filter(p => (p.user_id || '').toLowerCase() === walletAddress);
+          posts = mine.map<GraphQLPost>(p => ({
+            id: p.id,
+            post_cid: (p as any).post_cid || '',
+            wallet: p.user_id,
+            timestamp: p.created_at || new Date().toISOString(),
+            media_type: p.type === 'video' ? 'video' : (p.content_type === 'news' ? 'news' : 'text'),
+            source_url: p.source_url,
+            summary_text: p.ai_summary,
+            reward_points: p.far_score ?? 0,
+            lat: p.lat,
+            lng: p.lng,
+            is_reliable: !!p.is_reliable,
+            credibility_score: p.credibility_score ?? 0,
+            contributor_id: (p as any).contributor_id || ''
+          }));
+        }
 
-      } catch (err) {
-        console.error('Error loading profile data:', err);
-        setError('Failed to load profile data');
+        if (!profile) {
+          const total_xp = posts.reduce((acc, p) => acc + (p.reward_points || 0), 0);
+          profile = {
+            id: walletAddress,
+            wallet: walletAddress,
+            total_xp,
+            total_posts: posts.length,
+            total_nfts: 0,
+            total_rewards_claimed: 0,
+            last_activity: posts[0]?.timestamp || new Date().toISOString(),
+          } as GraphQLUser;
+        }
+
+        if (!cancelled) {
+          setUserProfile(profile);
+          setUserPosts(posts);
+        }
+      } catch {
+        if (!cancelled) setError('Failed to load profile');
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
+        inFlightRef.current = false;
       }
-    };
+    }
 
-    loadProfileData();
-  }, [walletAddress, isConnected, currentWallet]);
+    void loadProfileData();
+    return () => { cancelled = true; };
+  }, [walletAddress]);
 
   if (isLoading) {
     return (
@@ -100,10 +139,6 @@ export default function ProfilePage() {
           userPosts={userPosts}
           isOwnProfile={isOwnProfile}
         />
-
-        <div className="mt-8">
-          <NFTGallery walletAddress={walletAddress} />
-        </div>
       </div>
     </div>
   );

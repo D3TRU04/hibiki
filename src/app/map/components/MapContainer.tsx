@@ -2,10 +2,10 @@
 
 import { useEffect, useRef } from 'react';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import type mapboxgl from 'mapbox-gl';
-import { aiSummaryService } from '@/lib/ai/ai-summary';
+import mapboxgl from 'mapbox-gl';
 import type { Geometry as GeoJSONGeometry, Point as GeoJSONPoint } from 'geojson';
 import type { GeoJSONSource } from 'mapbox-gl';
+import { aiSummaryService } from '@/lib/ai/ai-summary';
 import { KleoPost } from '@/lib/types';
 
 let mapboxPrewarmed = false;
@@ -25,9 +25,8 @@ const MINIMAL_STYLE: mapboxgl.Style = {
 
 interface MapContainerProps {
   posts: KleoPost[];
-  onMapClick: (lat: number, lng: number) => void;
-  onPostClick?: (post: KleoPost) => void;
-  onMapReady?: (map: mapboxgl.Map) => void;
+  onMapClick: () => void;
+  onMapReady?: (_map: mapboxgl.Map) => void;
 }
 
 export default function MapContainer({ onMapClick, onMapReady, posts = [] }: MapContainerProps) {
@@ -51,10 +50,8 @@ export default function MapContainer({ onMapClick, onMapReady, posts = [] }: Map
 
     const init = async () => {
       const accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN as string | undefined;
-      if (!accessToken) { console.error('Mapbox access token not found'); return; }
+      if (!accessToken) { return; }
 
-      const mod = await import('mapbox-gl');
-      const mapboxgl = mod.default;
       mapboxgl.accessToken = accessToken;
       if (!mapboxPrewarmed) { try { mapboxgl.prewarm(); } catch {} mapboxPrewarmed = true; }
 
@@ -76,41 +73,46 @@ export default function MapContainer({ onMapClick, onMapReady, posts = [] }: Map
         fadeDuration: 0,
         renderWorldCopies: false,
         localIdeographFontFamily: 'sans-serif',
-        prefetchZoomDelta: 0,
         minZoom: 2,
-        projection: { name: 'globe' } as any,
-      } as mapboxgl.MapboxOptions);
+        projection: { name: 'globe' },
+      });
 
-      mapRef.current = map as mapboxgl.Map;
+      mapRef.current = map;
 
       map.on('load', () => {
         // If for any reason the style is empty, swap to default tiles
         try {
-          const style = (map as any).getStyle();
+          const style = map.getStyle();
           if (!style || !style.layers || style.layers.length === 0) {
-            (map as any).setStyle('mapbox://styles/mapbox/light-v11');
+            map.setStyle('mapbox://styles/mapbox/light-v11');
           }
         } catch {}
 
         // Terrain disabled for performance; sky layer remains for visual quality
         try {
-          if (!(map as any).getLayer('sky')) {
-            (map as any).addLayer({
+          if (!map.getLayer('sky')) {
+            map.addLayer({
               id: 'sky',
               type: 'sky',
               paint: {
                 'sky-type': 'atmosphere',
                 'sky-atmosphere-sun': [0.0, 0.0],
-                'sky-atmosphere-sun-intensity': 12,
+                'sky-atmosphere-sun-intensity': 15,
               },
-            } as any);
+            });
           }
-          if ((map as any).setFog) {
-            (map as any).setFog({
-              range: [0.8, 10],
-              color: '#8fd3ff',
-              "horizon-blend": 0.2,
-            } as any);
+        } catch {}
+
+        // Add fog for depth
+        try {
+          if (map.setFog) {
+            map.setFog({
+              'color': 'rgb(186, 210, 235)',
+              'high-color': 'rgb(36, 92, 223)',
+              'horizon-blend': 0.02,
+              'space-color': 'rgb(11, 11, 25)',
+              'star-intensity': 0.6,
+            });
           }
         } catch {}
 
@@ -180,7 +182,7 @@ export default function MapContainer({ onMapClick, onMapReady, posts = [] }: Map
                 <span style="font-size:12px;color:#6b7280;">Loading media…</span>
               </div>
             </div>`;
-          const newPopup = new (map as any).Popup({ closeButton: true, closeOnClick: false });
+          const newPopup = new mapboxgl.Popup({ closeButton: true, closeOnClick: false });
           newPopup.setLngLat(coords).setHTML(loadingHtml).addTo(map);
           popupRef.current = newPopup as mapboxgl.Popup;
 
@@ -234,7 +236,7 @@ export default function MapContainer({ onMapClick, onMapReady, posts = [] }: Map
           popupRef.current = null;
         });
 
-        map.on('click', (e: mapboxgl.MapMouseEvent) => { const { lng, lat } = e.lngLat; onMapClick(lat, lng); });
+        map.on('click', () => { onMapClick(); });
 
         if (onMapReady) onMapReady(map);
       });
@@ -243,66 +245,61 @@ export default function MapContainer({ onMapClick, onMapReady, posts = [] }: Map
     void init();
 
     return () => {
-      const map = mapRef.current as mapboxgl.Map | null;
+      const map = mapRef.current;
       if (map) map.remove();
       mapRef.current = null;
     };
   }, [onMapClick, onMapReady]);
 
   useEffect(() => {
-    const map = mapRef.current as mapboxgl.Map | null;
+    const map = mapRef.current;
     if (!map) return;
     const src = map.getSource(sourceId) as GeoJSONSource | undefined;
     if (!src) return;
 
-    console.log(`🗺️ MapContainer received ${posts.length} posts`);
-    console.log(`📍 Posts with coordinates:`, posts.filter(p => p.lat != null && p.lng != null).length);
-
     // If the dataset is huge, cap to viewport features for faster updates
     const shouldCap = posts.length > 3000;
     const computeFeatures = (): Array<GeoJSON.Feature<GeoJSON.Point, { id?: string; contributor_id: string; ai_summary?: string; source_url?: string }>> => {
-      let list = posts;
-      if (shouldCap) {
-        const b = (map as any).getBounds() as mapboxgl.LngLatBounds;
-        list = posts.filter(p => typeof p.lng === 'number' && typeof p.lat === 'number' && b.contains([p.lng, p.lat] as any)).slice(0, 1500);
-      }
-      type PostProps = { id?: string; contributor_id: string; ai_summary?: string; source_url?: string };
-      return list.map((p) => ({
-        type: 'Feature' as const,
-        geometry: { type: 'Point' as const, coordinates: [Number(p.lng.toFixed(5)), Number(p.lat.toFixed(5))] as [number, number] },
-        properties: {
-          id: p.id,
-          contributor_id: p.user_id || 'Anonymous',
-          ai_summary: (p as unknown as { ai_summary?: string }).ai_summary || '',
-          source_url: (p as unknown as { source_url?: string }).source_url || '',
-        },
-      }));
+      const features: Array<GeoJSON.Feature<GeoJSON.Point, { id?: string; contributor_id: string; ai_summary?: string; source_url?: string }>> = [];
+      
+      postsRef.current.forEach(post => {
+        if (!post.lat || !post.lng) return;
+        
+        const feature: GeoJSON.Feature<GeoJSON.Point, { id?: string; contributor_id: string; ai_summary?: string; source_url?: string }> = {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [post.lng, post.lat]
+          },
+          properties: {
+            id: post.id,
+            contributor_id: post.user_id,
+            ai_summary: post.ai_summary,
+            source_url: post.source_url
+          }
+        };
+        
+        features.push(feature);
+      });
+      
+      return features;
     };
 
-    type PostProps = { id?: string; contributor_id: string; ai_summary?: string; source_url?: string };
-    const features: Array<GeoJSON.Feature<GeoJSON.Point, PostProps>> = computeFeatures();
+    const features: Array<GeoJSON.Feature<GeoJSON.Point, { id?: string; contributor_id: string; ai_summary?: string; source_url?: string }>> = computeFeatures();
 
-    console.log(`🎯 Creating ${features.length} map features from posts`);
-    features.forEach((feature, index) => {
-      if (index < 5) { // Log first 5 features
-        const coords = feature.geometry.coordinates;
-        console.log(`📍 Feature ${index}: [${coords[0]}, ${coords[1]}]`);
-      }
-    });
-
-    const collection: GeoJSON.FeatureCollection<GeoJSON.Point, PostProps> = { type: 'FeatureCollection', features };
+    const collection: GeoJSON.FeatureCollection<GeoJSON.Point, { id?: string; contributor_id: string; ai_summary?: string; source_url?: string }> = { type: 'FeatureCollection', features };
     src.setData(collection);
 
     if (shouldCap) {
       const handler = () => {
         const f = computeFeatures();
-        src.setData({ type: 'FeatureCollection', features: f } as any);
+        src.setData({ type: 'FeatureCollection', features: f });
       };
       const debounced = (() => {
         let t: any; return () => { clearTimeout(t); t = setTimeout(handler, 120); };
       })();
-      (map as any).on('moveend', debounced);
-      return () => { (map as any).off('moveend', debounced); };
+      map.on('moveend', debounced);
+      return () => { map.off('moveend', debounced); };
     }
   }, [posts]);
 

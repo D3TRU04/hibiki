@@ -1,613 +1,418 @@
 import { pinFileToIPFS, pinJSONToIPFS } from './pinata';
-import { 
-  IPFSMetadata, 
-  IPFSUserProfile, 
-  IPFSGlobalState, 
-  User, 
-  Post, 
-  CreatePostData,
-  RewardSystem,
-  KleoPost
-} from '../types';
+import { Post, User, RewardSystem } from '../types';
 
-// Get crypto object safely
-const getCrypto = () => {
-  if (typeof window !== 'undefined') {
-    return window.crypto;
-  }
-  // Node.js environment
-  if (typeof global !== 'undefined' && global.crypto) {
-    return global.crypto;
-  }
-  // Fallback for older Node.js versions
-  return require('crypto').webcrypto;
-};
-
-// Generate UUID safely
-function generateUUID(): string {
-  try {
-    const crypto = getCrypto();
-    return crypto.randomUUID();
-  } catch (error) {
-    // Fallback if crypto.randomUUID is not available
-    return `${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-}
-
-export async function uploadBlob(content: Blob): Promise<string> {
-  const cid = await pinFileToIPFS(new File([content], 'content.bin'));
-  return `ipfs://${cid}`;
-}
-
-// Global state management
-let globalState: IPFSGlobalState = {
-  users: {},
-  posts: {},
-  last_updated: new Date().toISOString(),
-  total_posts: 0,
-  total_users: 0
-};
-
-// Local cache for better performance
-const userCache = new Map<string, User>();
+// Simple post cache without global state
 const postCache = new Map<string, Post>();
 
-// Rate limiting (10 minutes between posts per user)
-const rateLimitMap = new Map<string, number>();
+// In-memory storage for posts (since we can't easily query Pinata)
+const localPosts = new Map<string, Post>();
 
-export class IPFSStorage {
-  private static instance: IPFSStorage;
-  private globalStateUrl: string | null = null;
+// Local storage keys
+const POSTS_STORAGE_KEY = 'kleo_local_posts';
 
-  static getInstance(): IPFSStorage {
-    if (!IPFSStorage.instance) {
-      IPFSStorage.instance = new IPFSStorage();
+export class IPFSStorageService {
+  private static instance: IPFSStorageService;
+
+  static getInstance(): IPFSStorageService {
+    if (!IPFSStorageService.instance) {
+      IPFSStorageService.instance = new IPFSStorageService();
     }
-    return IPFSStorage.instance;
+    return IPFSStorageService.instance;
   }
 
   private constructor() {
-    this.loadGlobalState();
+    this.loadStoredPosts();
   }
 
-  // Initialize global state
-  private async loadGlobalState() {
-    try {
-      // Try pointer API first
-      const pointerResp = await fetch('/api/state/latest', { cache: 'no-store' }).catch(() => null as any);
-      if (pointerResp && pointerResp.ok) {
-        const data = (await pointerResp.json()) as { cid?: string | null };
-        if (data?.cid) {
-          this.globalStateUrl = `ipfs://${data.cid}`;
-        }
-      }
-      // Fallback to locally cached latest state cid (for immediate availability after write)
-      if (!this.globalStateUrl && typeof window !== 'undefined') {
-        const cachedCid = localStorage.getItem('kleo_latest_state_cid');
-        if (cachedCid) {
-          this.globalStateUrl = `ipfs://${cachedCid}`;
-        }
-      }
-      if (this.globalStateUrl) {
-        const response = await fetch(this.getIPFSGatewayUrl(this.globalStateUrl));
-        if (response.ok) {
-          globalState = await response.json();
-        }
-      }
-    } catch {
-      console.log('No existing global state found, starting fresh');
-    }
-  }
-
-  // Save global state to IPFS
-  private async saveGlobalState(): Promise<string> {
-    try {
-      globalState.last_updated = new Date().toISOString();
-      const cid = await pinJSONToIPFS(globalState);
-      const url = `ipfs://${cid}`;
-      this.globalStateUrl = url;
-      console.log('Global state saved to IPFS:', url);
-      // Cache latest cid locally for immediate reads on next load
-      try { if (typeof window !== 'undefined') localStorage.setItem('kleo_latest_state_cid', cid); } catch {}
-      // Update pointer on server (best-effort)
+  private loadStoredPosts(): void {
+    if (typeof window !== 'undefined') {
       try {
-        await fetch('/api/state/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ latest: cid }),
-        });
-      } catch {}
-      return url;
-    } catch (error) {
-      console.error('Failed to save to IPFS, using local fallback:', error);
-      return 'local://global-state.json';
-    }
-  }
-
-  // User management
-  async createUser(userData: Partial<User>): Promise<User> {
-    const userId = userData.id || generateUUID();
-    const now = new Date().toISOString();
-
-    const user: User = {
-      id: userId,
-      email: userData.email,
-      wallet_address: userData.wallet_address,
-      xrpl_address: userData.xrpl_address,
-      far_score: 0,
-      contribution_points: 0,
-      created_at: now,
-      updated_at: now,
-    };
-
-    // Store in global state
-    globalState.users[userId] = user;
-    globalState.total_users++;
-    userCache.set(userId, user);
-
-    // Try to save to IPFS if available
-      try {
-        const userProfile: IPFSUserProfile = {
-          ...user,
-          posts: []
-        };
-
-      const profileCid = await pinJSONToIPFS(userProfile);
-        user.ipfs_profile_url = `ipfs://${profileCid}`;
-        await this.saveGlobalState();
+        const storedPosts = localStorage.getItem(POSTS_STORAGE_KEY);
+        if (storedPosts) {
+          const posts = JSON.parse(storedPosts) as Post[];
+          posts.forEach(post => {
+            if (post.id) {
+              localPosts.set(post.id, post);
+            }
+          });
+        }
       } catch (error) {
-        console.error('Failed to save user to IPFS:', error);
-      user.ipfs_profile_url = `local://user-${userId}.json`;
+        // Error loading stored posts - handled silently
+      }
     }
-
-    return user;
   }
 
-  async getUser(userId: string): Promise<User | null> {
-    // Check cache first
-    if (userCache.has(userId)) {
-      return userCache.get(userId)!;
-    }
-
-    // Check global state
-    const userData = globalState.users[userId];
-    if (userData && typeof userData === 'object') {
-      const user = userData as User;
-      userCache.set(userId, user);
-      return user;
-    }
-
-    const profileUrl = globalState.users[userId];
-    if (!profileUrl || typeof profileUrl !== 'string') {
-      return null;
-    }
-
-    try {
-      const response = await fetch(this.getIPFSGatewayUrl(profileUrl));
-      if (!response.ok) {
-        return null;
+  private savePostsToStorage(): void {
+    if (typeof window !== 'undefined') {
+      try {
+        const posts = Array.from(localPosts.values());
+        localStorage.setItem(POSTS_STORAGE_KEY, JSON.stringify(posts));
+      } catch (error) {
+        // Error saving posts to storage - handled silently
       }
+    }
+  }
 
-      const userProfile: IPFSUserProfile = await response.json();
-      const user: User = {
-        id: userProfile.id,
-        email: userProfile.email,
-        wallet_address: userProfile.wallet_address,
-        xrpl_address: userProfile.xrpl_address,
-        far_score: userProfile.far_score,
-        contribution_points: userProfile.contribution_points,
-        created_at: userProfile.created_at,
-        updated_at: userProfile.updated_at,
-        ipfs_profile_url: profileUrl
+  // Upload post to IPFS via Pinata
+  async uploadPost(post: Post): Promise<string> {
+    try {
+      const postData = {
+        id: post.id,
+        user_id: post.user_id,
+        type: post.type,
+        content: post.content,
+        lat: post.lat,
+        lng: post.lng,
+        media_url: post.media_url,
+        ipfs_metadata_url: post.ipfs_metadata_url,
+        ipfs_post_url: post.ipfs_post_url,
+        far_score: post.far_score,
+        engagement_score: post.engagement_score,
+        flags: post.flags,
+        created_at: post.created_at,
+        updated_at: post.updated_at,
+        tags: post.tags,
+        contributor_id: post.contributor_id,
+        wallet_type: post.wallet_type,
+        reward_points: post.reward_points,
+        post_cid: post.post_cid
       };
 
-      userCache.set(userId, user);
-      return user;
-    } catch (error) {
-      console.error('Error fetching user:', error);
-      return null;
-    }
-  }
-
-  async updateUser(userId: string, updates: Partial<User>): Promise<User | null> {
-    const user = await this.getUser(userId);
-    if (!user) {
-      return null;
-    }
-
-    const updatedUser: User = {
-      ...user,
-      ...updates,
-      updated_at: new Date().toISOString()
-    };
-
-    // Update global state
-    globalState.users[userId] = updatedUser;
-    userCache.set(userId, updatedUser);
-
-    // Try to update IPFS profile
-      try {
-        const userProfile: IPFSUserProfile = {
-          ...updatedUser,
-          posts: [] // We'll maintain posts separately
-        };
-
-      const profileCid = await pinJSONToIPFS(userProfile);
-        const profileUrl = `ipfs://${profileCid}`;
-
-        updatedUser.ipfs_profile_url = profileUrl;
-        globalState.users[userId] = profileUrl;
-        await this.saveGlobalState();
-      } catch (error) {
-        console.error('Failed to update user on IPFS:', error);
-      updatedUser.ipfs_profile_url = `local://user-${userId}.json`;
-    }
-
-    return updatedUser;
-  }
-
-  // Post management
-  async createPost(postData: CreatePostData, user: User): Promise<Post | null> {
-    // Check rate limit
-    const lastPostTime = rateLimitMap.get(user.id);
-    const now = Date.now();
-    if (lastPostTime && (now - lastPostTime) < 10 * 60 * 1000) { // 10 minutes
-      throw new Error('Rate limit: You can only post once every 10 minutes');
-    }
-
-    const postId = generateUUID();
-    const nowISO = new Date().toISOString();
-
-    let mediaUrl: string | undefined;
-
-    // Upload media if provided
-    if (postData.mediaFile) {
-      try {
-        const mediaBlob = new Blob([postData.mediaFile], { type: postData.mediaFile.type });
-        const mediaFile = new File([mediaBlob], postData.mediaFile.name, { type: postData.mediaFile.type });
-        const mediaCid = await pinFileToIPFS(mediaFile);
-        mediaUrl = `ipfs://${mediaCid}`;
-      } catch (error) {
-        console.error('Failed to upload media to IPFS:', error);
-        mediaUrl = `local://media-${postId}.${postData.mediaFile.name.split('.').pop()}`;
-      }
-    }
-
-    // Derive post/media type from provided file (only 'video' or 'text')
-    const derivedPostType: 'text' | 'video' = postData.mediaFile && postData.mediaFile.type?.startsWith('video')
-      ? 'video'
-      : 'text';
-
-    // Create metadata
-    const metadata: IPFSMetadata = {
-      title: postData.text.substring(0, 100),
-      content: postData.text,
-      lat: postData.lat,
-      lng: postData.lng,
-      timestamp: nowISO,
-      user_id: user.id,
-      media_url: mediaUrl,
-      type: derivedPostType,
-      far_score: user.far_score,
-      engagement_score: 0
-    };
-
-    let metadataUrlFinal: string;
-
-    // Upload metadata
-      try {
-      const metadataCid = await pinJSONToIPFS(metadata);
-        metadataUrlFinal = `ipfs://${metadataCid}`;
-      } catch (error) {
-        console.error('Failed to upload metadata to IPFS:', error);
-      metadataUrlFinal = `local://metadata-${postId}.json`;
-    }
-
-    // Create post object
-    const post: Post = {
-      id: postId,
-      user_id: user.id,
-      type: derivedPostType,
-      content: postData.text,
-      lat: postData.lat,
-      lng: postData.lng,
-      media_url: mediaUrl,
-      ipfs_metadata_url: metadataUrlFinal,
-      far_score: user.far_score,
-      engagement_score: 0,
-      flags: 0,
-      created_at: nowISO,
-      updated_at: nowISO,
-      user: user,
-      tags: postData.tags || [],
-      contributor_id: postData.contributor_id,
-      wallet_type: postData.wallet?.type,
-      reward_points: undefined,
-      post_cid: undefined
-    };
-
-    // Store post in global state
-    globalState.posts[postId] = post;
-    globalState.total_posts++;
-    await this.saveGlobalState();
-
-    // Update user's contribution points
-    const pointsEarned = this.calculatePointsEarned(derivedPostType, user.far_score);
-    user.contribution_points += pointsEarned;
-    await this.updateUser(user.id, { contribution_points: user.contribution_points });
-
-    // Update rate limit
-    rateLimitMap.set(user.id, now);
-
-    // Cache the post
-    postCache.set(postId, post);
-
-    return post;
-  }
-
-  // Persist an already-created KleoPost (from alternate flow) into global state
-  async createPostFromKleo(kleo: KleoPost): Promise<Post> {
-    const nowISO = new Date().toISOString();
-    const postId = kleo.id || generateUUID();
-
-    const post: Post = {
-      id: postId,
-      user_id: kleo.user_id || 'external',
-      type: kleo.type === 'video' ? 'video' : 'text',
-      content: kleo.content || '',
-      lat: kleo.lat,
-      lng: kleo.lng,
-      media_url: kleo.media_url || kleo.ipfs_metadata_url,
-      ipfs_metadata_url: kleo.ipfs_metadata_url,
-      far_score: kleo.far_score ?? 0,
-      engagement_score: kleo.engagement_score ?? 0,
-      flags: kleo.flags ?? 0,
-      created_at: kleo.created_at || nowISO,
-      updated_at: kleo.updated_at || nowISO,
-      tags: [],
-    } as Post;
-
-    // Add to global state
-    globalState.posts[postId] = post;
-    globalState.total_posts++;
-    
-    // Clear post cache to ensure fresh data
-    postCache.delete(postId);
-    
-    console.log(`✅ Post ${postId} added to global state. Total posts: ${globalState.total_posts}`);
-    console.log(`📍 Post location: ${post.lat}, ${post.lng}`);
-    
-    // Save global state to IPFS
-    try {
-      await this.saveGlobalState();
-      console.log(`💾 Global state saved to IPFS for post ${postId}`);
-    } catch (error) {
-      console.error(`❌ Failed to save global state for post ${postId}:`, error);
-    }
-    
-    // Add to post cache
-    postCache.set(postId, post);
-    return post;
-  }
-
-  // Refresh global state from IPFS (useful for syncing with Pinata)
-  async refreshGlobalState(): Promise<void> {
-    try {
-      console.log('🔄 Refreshing global state from IPFS...');
-      await this.loadGlobalState();
-      console.log(`✅ Global state refreshed. Total posts: ${globalState.total_posts}`);
-    } catch (error) {
-      console.error('❌ Failed to refresh global state:', error);
-    }
-  }
-
-  // Sync posts from Pinata to local state
-  async syncFromPinata(): Promise<void> {
-    try {
-      console.log('🔄 Syncing posts from Pinata...');
+      const cid = await pinJSONToIPFS(postData);
       
-      // Try to get the latest state pointer
-      const pointerResp = await fetch('/api/state/latest', { cache: 'no-store' }).catch(() => null as any);
-      if (pointerResp && pointerResp.ok) {
-        const data = (await pointerResp.json()) as { cid?: string | null };
-        if (data?.cid) {
-          console.log(`📍 Latest state CID: ${data.cid}`);
-          
-          // Load the latest state
-          const response = await fetch(`https://ipfs.io/ipfs/${data.cid}`);
-          if (response.ok) {
-            const latestState = await response.json() as IPFSGlobalState;
-            console.log(`📊 Latest state has ${latestState.total_posts} posts`);
-            
-            // Merge with current state
-            Object.assign(globalState, latestState);
-            globalState.last_updated = latestState.last_updated;
-            
-            // Clear caches to ensure fresh data
-            postCache.clear();
-            userCache.clear();
-            
-            console.log(`✅ Synced ${globalState.total_posts} posts from Pinata`);
-            return;
-          }
-        }
+      // Store locally for immediate access
+      if (post.id) {
+        localPosts.set(post.id, post);
+        this.savePostsToStorage(); // Save to storage after successful upload
       }
       
-      // Fallback: if state pointer fails, try to load from local cache
-      console.log('⚠️ State pointer failed, trying local cache...');
-      const cachedCid = localStorage.getItem('kleo_latest_state_cid');
-      if (cachedCid) {
-        try {
-          const response = await fetch(`https://ipfs.io/ipfs/${cachedCid}`);
-          if (response.ok) {
-            const latestState = await response.json() as IPFSGlobalState;
-            console.log(`📊 Cached state has ${latestState.total_posts} posts`);
-            
-            // Merge with current state
-            Object.assign(globalState, latestState);
-            globalState.last_updated = latestState.last_updated;
-            
-            // Clear caches to ensure fresh data
-            postCache.clear();
-            userCache.clear();
-            
-            console.log(`✅ Synced ${globalState.total_posts} posts from cached state`);
-            return;
-          }
-        } catch (error) {
-          console.warn('⚠️ Failed to load cached state:', error);
-        }
-      }
-      
-      console.log('ℹ️ No external state to sync, using current local state');
-      
+      return cid;
     } catch (error) {
-      console.error('❌ Failed to sync from Pinata:', error);
-    }
-  }
-
-  // Manually add a post to the global state (useful for testing)
-  async addPostToGlobalState(post: Post): Promise<void> {
-    try {
-      if (!post.id) {
-        console.error('❌ Cannot add post without ID to global state');
-        return;
-      }
-      
-      globalState.posts[post.id] = post;
-      globalState.total_posts++;
-      
-      // Clear post cache to ensure fresh data
-      postCache.delete(post.id);
-      
-      console.log(`✅ Post ${post.id} manually added to global state. Total posts: ${globalState.total_posts}`);
-      console.log(`📍 Post location: ${post.lat}, ${post.lng}`);
-      
-      // Save global state to IPFS
-      try {
-        await this.saveGlobalState();
-        console.log(`💾 Global state saved to IPFS for post ${post.id}`);
-      } catch (error) {
-        console.error(`❌ Failed to save global state for post ${post.id}:`, error);
-      }
-      
-      // Add to post cache
-      postCache.set(post.id, post);
-    } catch (error) {
-      console.error(`❌ Failed to add post ${post.id} to global state:`, error);
-    }
-  }
-
-  // Upload a single file to IPFS
-  async uploadFile(file: File): Promise<string> {
-    try {
-      const fileBlob = new Blob([file], { type: file.type });
-      const ipfsFile = new File([fileBlob], file.name, { type: file.type });
-      const cid = await pinFileToIPFS(ipfsFile);
-      return `ipfs://${cid}`;
-    } catch (error) {
-      console.error('Failed to upload file to IPFS:', error);
       throw error;
     }
   }
 
-  async getPosts(): Promise<Post[]> {
-    console.log(`🔍 Fetching posts from global state. Total posts in state: ${globalState.total_posts}`);
-    console.log(`📊 Global state posts keys:`, Object.keys(globalState.posts));
-    
-    const posts: Post[] = [];
+  // Create post from KleoPost (used by API)
+  async createPostFromKleo(kleoPost: any): Promise<Post> {
+    const post: Post = {
+      id: kleoPost.id,
+      user_id: kleoPost.user_id || 'anonymous',
+      type: kleoPost.type === 'video' ? 'video' : 'text',
+      content: kleoPost.content,
+      lat: kleoPost.lat,
+      lng: kleoPost.lng,
+      media_url: kleoPost.media_url || kleoPost.ipfs_metadata_url,
+      ipfs_post_url: kleoPost.ipfs_metadata_url,
+      far_score: kleoPost.far_score || 0,
+      engagement_score: kleoPost.engagement_score || 0,
+      flags: kleoPost.flags || 0,
+      created_at: kleoPost.created_at,
+      updated_at: kleoPost.updated_at || kleoPost.created_at,
+      tags: [],
+      contributor_id: kleoPost.user_id,
+      ipfs_metadata_url: kleoPost.ipfs_metadata_url
+    };
 
-    for (const [postId, postData] of Object.entries(globalState.posts)) {
-      try {
-        // Check cache first
-        if (postCache.has(postId)) {
-          const cachedPost = postCache.get(postId)!;
-          posts.push(cachedPost);
-          console.log(`📋 Using cached post ${postId} at ${cachedPost.lat}, ${cachedPost.lng}`);
-          continue;
-        }
-
-        // Handle both object and URL formats
-        let post: Post;
-        if (typeof postData === 'object') {
-          // Post is already stored as object in global state
-          post = postData as Post;
-          console.log(`📄 Post ${postId} found in global state at ${post.lat}, ${post.lng}`);
-        } else {
-          // Post is stored as URL, try to fetch from IPFS
-          console.log(`🔗 Fetching post ${postId} from IPFS URL: ${postData}`);
-          const response = await fetch(this.getIPFSGatewayUrl(postData));
-          if (response.ok) {
-            post = await response.json();
-            console.log(`✅ Post ${postId} fetched from IPFS at ${post.lat}, ${post.lng}`);
-          } else {
-            console.error(`❌ Failed to fetch post ${postId} from IPFS`);
-            continue;
-          }
-        }
-        
-        // Fetch user data
-        if (post.user_id) {
-          const user = await this.getUser(post.user_id);
-          if (user) {
-            post.user = user;
-          }
-        }
-
-        postCache.set(postId, post);
-        posts.push(post);
-      } catch (error) {
-        console.error(`❌ Error fetching post ${postId}:`, error);
-      }
+    // Store locally
+    if (post.id) {
+      localPosts.set(post.id, post);
+      this.savePostsToStorage(); // Save to storage after successful creation
     }
-
-    console.log(`🎯 Returning ${posts.length} posts with valid coordinates`);
-    const postsWithCoords = posts.filter(p => p.lat != null && p.lng != null);
-    console.log(`📍 Posts with coordinates: ${postsWithCoords.length}`);
-
-    // Sort by creation date (newest first)
-    return postsWithCoords.sort((a, b) => 
-      new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()
-    );
+    
+    return post;
   }
 
-  // Reward system
-  private calculatePointsEarned(postType: string, userFarScore: number): number {
-    let basePoints = 0;
-    
-    switch (postType) {
-      case 'video':
-        basePoints = 50;
-        break;
-      default:
-        basePoints = 10;
-    }
+  // Create post directly
+  async createPost(postData: any, user: any): Promise<Post> {
+    const post: Post = {
+      id: postData.id || this.generateId(),
+      user_id: user?.id || 'anonymous',
+      type: postData.type || 'text',
+      content: postData.content,
+      lat: postData.lat,
+      lng: postData.lng,
+      media_url: postData.media_url,
+      ipfs_post_url: postData.ipfs_post_url,
+      far_score: postData.far_score || 0,
+      engagement_score: postData.engagement_score || 0,
+      flags: postData.flags || 0,
+      created_at: postData.created_at || new Date().toISOString(),
+      updated_at: postData.updated_at || new Date().toISOString(),
+      tags: postData.tags || [],
+      contributor_id: user?.id || 'anonymous',
+      ipfs_metadata_url: postData.ipfs_metadata_url
+    };
 
-    // Apply far score multiplier (higher reputation = more points)
-    const multiplier = 1 + (userFarScore / 1000);
-    return Math.floor(basePoints * multiplier);
+    // Store locally
+    if (post.id) {
+      localPosts.set(post.id, post);
+      this.savePostsToStorage(); // Save to storage after successful creation
+    }
+    
+    return post;
+  }
+
+  // Generate a simple ID
+  private generateId(): string {
+    return `post_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  // Sync from Pinata (placeholder - in a real implementation this would query Pinata API)
+  async syncFromPinata(): Promise<void> {
+    try {
+      const res = await fetch('/api/pinata/list', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = (await res.json()) as { cids?: string[] };
+      const cids = Array.isArray(data?.cids) ? data.cids.slice(0, 200) : [];
+      for (const cid of cids) {
+        try {
+          const metaRes = await fetch(`https://ipfs.io/ipfs/${cid}`, { cache: 'no-store' });
+          if (!metaRes.ok) continue;
+          const meta = await metaRes.json();
+          const post: Post = {
+            id: String(meta.id || cid),
+            user_id: String(meta.user_id || meta.wallet_address || 'anonymous'),
+            type: (meta.type === 'video' ? 'video' : 'text') as Post['type'],
+            content: String(meta.content || meta.summary || ''),
+            lat: Number(meta.lat || 0),
+            lng: Number(meta.lng || 0),
+            media_url: typeof meta.media_url === 'string' ? meta.media_url : undefined,
+            ipfs_metadata_url: `ipfs://${cid}`,
+            ipfs_post_url: typeof meta.ipfs_post_url === 'string' ? meta.ipfs_post_url : undefined,
+            far_score: Number(meta.far_score || 0),
+            engagement_score: Number(meta.engagement_score || 0),
+            flags: Number(meta.flags || 0),
+            created_at: String(meta.created_at || new Date().toISOString()),
+            updated_at: String(meta.updated_at || meta.created_at || new Date().toISOString()),
+            tags: Array.isArray(meta.tags) ? meta.tags as string[] : [],
+            contributor_id: String(meta.contributor_id || meta.user_id || ''),
+          };
+          if (post.id) {
+            localPosts.set(post.id, post);
+          }
+        } catch {}
+      }
+      this.savePostsToStorage();
+    } catch {}
+  }
+
+  // Get all posts (returns locally stored posts)
+  async getPosts(): Promise<Post[]> {
+    // Ensure we have the latest data from storage
+    this.loadStoredPosts();
+    return Array.from(localPosts.values());
+  }
+
+  // Manual sync from localStorage (useful for debugging)
+  async syncFromLocalStorage(): Promise<void> {
+    this.loadStoredPosts();
+  }
+
+  // Get post from IPFS
+  async getPost(cid: string): Promise<Post | null> {
+    try {
+      // Check cache first
+      if (postCache.has(cid)) {
+        return postCache.get(cid)!;
+      }
+
+      // Fetch from IPFS gateway
+      const response = await fetch(`https://ipfs.io/ipfs/${cid}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch post: ${response.statusText}`);
+      }
+      
+      const post = await response.json() as Post;
+      
+      // Cache the post
+      postCache.set(cid, post);
+      
+      return post;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  // Get multiple posts from IPFS by CIDs
+  async getPostsByCids(cids: string[]): Promise<Post[]> {
+    const posts: Post[] = [];
+    
+    for (const cid of cids) {
+      const post = await this.getPost(cid);
+      if (post) {
+        posts.push(post);
+      }
+    }
+    
+    return posts;
+  }
+
+  // Upload media file to IPFS via Pinata
+  async uploadMedia(file: File): Promise<string> {
+    try {
+      const cid = await pinFileToIPFS(file);
+      return cid;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Get IPFS gateway URL
+  getGatewayUrl(cid: string): string {
+    return `https://ipfs.io/ipfs/${cid}`;
+  }
+
+  // Clear cache (useful for memory management)
+  clearCache(): void {
+    postCache.clear();
+  }
+
+  // Get cache size
+  getCacheSize(): number {
+    return postCache.size;
+  }
+
+  // Get local posts count
+  getLocalPostsCount(): number {
+    return localPosts.size;
+  }
+
+  // Clear local posts (useful for testing)
+  clearLocalPosts(): void {
+    localPosts.clear();
+    this.savePostsToStorage(); // Clear storage as well
+  }
+
+  // User management methods
+  async getUser(userId: string): Promise<User | null> {
+    try {
+      // Check if we have the user in local storage first
+      const userKey = `user_${userId}`;
+      const userData = localStorage.getItem(userKey);
+      
+      if (userData) {
+        return JSON.parse(userData) as User;
+      }
+
+      // If not in local storage, try to fetch from IPFS
+      // This would require storing user IPFS CIDs somewhere
+      // For now, return null if user doesn't exist
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async createUser(userData: Partial<User>): Promise<User> {
+    try {
+      const user: User = {
+        id: userData.id || this.generateId(),
+        email: userData.email,
+        wallet_address: userData.wallet_address,
+        xrpl_address: userData.xrpl_address,
+        far_score: userData.far_score || 0,
+        contribution_points: userData.contribution_points || 0,
+        created_at: userData.created_at || new Date().toISOString(),
+        updated_at: userData.updated_at || new Date().toISOString(),
+        ipfs_profile_url: userData.ipfs_profile_url
+      };
+      
+      // Upload user profile to IPFS
+      const userProfile = {
+        id: user.id,
+        email: user.email,
+        wallet_address: user.wallet_address,
+        xrpl_address: user.xrpl_address,
+        far_score: user.far_score,
+        contribution_points: user.contribution_points,
+        created_at: user.created_at,
+        updated_at: user.updated_at
+      };
+      
+      const cid = await pinJSONToIPFS(userProfile);
+      user.ipfs_profile_url = cid;
+      
+      // Store user in local storage for quick access
+      const userKey = `user_${user.id}`;
+      localStorage.setItem(userKey, JSON.stringify(user));
+      
+      return user;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async updateUser(userId: string, updates: Partial<User>): Promise<User | null> {
+    try {
+      const existingUser = await this.getUser(userId);
+      if (!existingUser) {
+        return null;
+      }
+
+      const updatedUser: User = {
+        ...existingUser,
+        ...updates,
+        updated_at: new Date().toISOString()
+      };
+
+      // Update user profile in IPFS
+      const userProfile = {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        wallet_address: updatedUser.wallet_address,
+        xrpl_address: updatedUser.xrpl_address,
+        far_score: updatedUser.far_score,
+        contribution_points: updatedUser.contribution_points,
+        created_at: updatedUser.created_at,
+        updated_at: updatedUser.updated_at
+      };
+      
+      const cid = await pinJSONToIPFS(userProfile);
+      updatedUser.ipfs_profile_url = cid;
+      
+      // Update in local storage
+      const userKey = `user_${userId}`;
+      localStorage.setItem(userKey, JSON.stringify(updatedUser));
+      
+      return updatedUser;
+    } catch (error) {
+      return null;
+    }
   }
 
   async getRewardSystem(userId: string): Promise<RewardSystem | null> {
-    const user = await this.getUser(userId);
-    if (!user) return null;
+    try {
+      const user = await this.getUser(userId);
+      if (!user) {
+        return null;
+      }
 
-    const reputationTier = this.calculateReputationTier(user.far_score);
-    const engagementMultiplier = this.calculateEngagementMultiplier(user.far_score);
+      // Create reward system based on user data
+      const rewardSystem: RewardSystem = {
+        far_score: user.far_score,
+        contribution_points: user.contribution_points,
+        engagement_multiplier: this.calculateEngagementMultiplier(user.contribution_points),
+        reputation_tier: this.calculateReputationTier(user.far_score),
+        xrpl_rewards_enabled: !!user.xrpl_address,
+        xrpl_address: user.xrpl_address,
+        pending_rewards: 0, // This would be calculated from actual rewards
+        posts_created: 0, // This would be calculated from actual posts
+        posts_liked: 0, // This would be calculated from actual interactions
+        posts_shared: 0, // This would be calculated from actual interactions
+        days_active: this.calculateDaysActive(user.created_at)
+      };
+      
+      return rewardSystem;
+    } catch (error) {
+      return null;
+    }
+  }
 
-    return {
-      far_score: user.far_score,
-      contribution_points: user.contribution_points,
-      engagement_multiplier: engagementMultiplier,
-      reputation_tier: reputationTier,
-      xrpl_rewards_enabled: !!user.xrpl_address,
-      xrpl_address: user.xrpl_address,
-      pending_rewards: Math.floor(user.contribution_points / 100), // 1 XRP per 100 points
-      posts_created: 0, // Would need to count from posts
-      posts_liked: 0,
-      posts_shared: 0,
-      days_active: Math.floor((Date.now() - new Date(user.created_at).getTime()) / (1000 * 60 * 60 * 24))
-    };
+  private calculateEngagementMultiplier(contributionPoints: number): number {
+    if (contributionPoints >= 1000) return 2.0;
+    if (contributionPoints >= 500) return 1.5;
+    if (contributionPoints >= 100) return 1.2;
+    return 1.0;
   }
 
   private calculateReputationTier(farScore: number): 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' {
@@ -618,27 +423,31 @@ export class IPFSStorage {
     return 'bronze';
   }
 
-  private calculateEngagementMultiplier(farScore: number): number {
-    return 1 + (farScore / 10000); // Max 2x multiplier at 10k far score
+  private calculateDaysActive(createdAt: string): number {
+    const created = new Date(createdAt);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - created.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }
 
-  // Utility functions
-  getIPFSGatewayUrl(ipfsUrl: string): string {
-    if (!ipfsUrl.startsWith('ipfs://')) {
-      return ipfsUrl;
+  async addPostToGlobalState(post: Post): Promise<void> {
+    try {
+      // Add post to local storage
+      if (post.id) {
+        localPosts.set(post.id, post);
+        this.savePostsToStorage(); // Save to storage after successful addition
+      }
+      
+      // In a real implementation, this would also update a global state in IPFS
+      // For now, just store locally
+    } catch (error) {
+      // Error adding post to global state - handled silently
     }
-    
-    const cid = ipfsUrl.replace('ipfs://', '');
-    return `https://ipfs.io/ipfs/${cid}`;
-  }
-
-  // Clear caches (useful for testing)
-  clearCaches() {
-    userCache.clear();
-    postCache.clear();
-    rateLimitMap.clear();
   }
 }
 
 // Export singleton instance
-export const ipfsStorage = IPFSStorage.getInstance();
+export const ipfsStorageService = IPFSStorageService.getInstance();
+
+// Export alias for compatibility with existing code
+export const ipfsStorage = ipfsStorageService;

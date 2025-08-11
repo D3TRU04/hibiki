@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useDynamicContext } from '@dynamic-labs/sdk-react';
 import { useDynamicWallet } from '@/hooks/useDynamicWallet';
 import { X, User, LogOut, Wallet, Sparkles } from 'lucide-react';
@@ -13,16 +13,15 @@ interface DynamicAuthModalProps {
 
 export default function DynamicAuthModal({ isOpen, onClose }: DynamicAuthModalProps) {
   const { wallet, isLoading, isConnected, disconnect, user } = useDynamicWallet();
-  const { setShowAuthFlow } = (useDynamicContext() as unknown as { setShowAuthFlow?: (show: boolean) => void });
+  const { setShowAuthFlow } = (useDynamicContext() as unknown as { setShowAuthFlow?: Function });
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  const openDynamicAuth = async () => {
+  const openDynamicAuth = useCallback(async () => {
     try {
-      // Force re-open even if previously opened by toggling off then on, with a short delay
       setShowAuthFlow?.(false);
-      await sleep(120);
+      await sleep(60);
       setShowAuthFlow?.(true);
     } catch {}
-  };
+  }, [setShowAuthFlow]);
   const [showDetails, setShowDetails] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const envChainId = (process.env.NEXT_PUBLIC_EVM_CHAIN_ID || '1449000').trim();
@@ -41,20 +40,18 @@ export default function DynamicAuthModal({ isOpen, onClose }: DynamicAuthModalPr
     } catch { setNeedsNetworkSwitch(false); }
   }, [expectedChainHex, isOpen]);
 
-  // When the modal opens and user is not connected, proactively open Dynamic auth flow
+  // When the modal opens and user is not connected, proactively open Dynamic auth flow (non-blocking)
   useEffect(() => {
     if (isOpen && !isConnected) {
       void openDynamicAuth();
     }
-  }, [isOpen, isConnected]);
+  }, [isOpen, isConnected, openDynamicAuth]);
 
   async function directConnectXRPL() {
     try {
-      // Always reveal Dynamic's auth flow alongside direct connect
       await openDynamicAuth();
       const eth = (window as any).ethereum;
       if (!eth) {
-        // Try to open MetaMask install page
         window.open('https://metamask.io/download/', '_blank');
         setConnectError('MetaMask not detected. Please install MetaMask and reload.');
         return;
@@ -63,7 +60,6 @@ export default function DynamicAuthModal({ isOpen, onClose }: DynamicAuthModalPr
         setConnectError('Missing network env: EVM_CHAIN_NAME / EVM_RPC_URL / EVM_CURRENCY');
         return;
       }
-      // Always try adding the chain first (handles both unknown/known cases gracefully)
       const addParams: any = {
         chainId: expectedChainHex,
         chainName: expectedChainName,
@@ -71,19 +67,16 @@ export default function DynamicAuthModal({ isOpen, onClose }: DynamicAuthModalPr
         nativeCurrency: { name: expectedCurrency, symbol: expectedCurrency, decimals: 18 },
       };
       if (expectedBlockExplorer) addParams.blockExplorerUrls = [expectedBlockExplorer];
-      try { await eth.request({ method: 'wallet_addEthereumChain', params: [addParams] }); } catch (e) { /* ignore if already added */ }
-      // Ensure switch
+      try { await eth.request({ method: 'wallet_addEthereumChain', params: [addParams] }); } catch { /* ignore if already added */ }
       await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: expectedChainHex }] });
-      // Request accounts
       const accounts: string[] = await eth.request({ method: 'eth_requestAccounts' });
       if (accounts && accounts[0]) {
-        // Minimal local wallet state for UI continuity
         (window as any).local_xrpl_wallet = { address: accounts[0], type: 'EVM', isConnected: true };
+        try { window.dispatchEvent(new Event('kleo_wallet_update')); } catch {}
         onClose();
         setConnectError(null);
       }
     } catch (err: any) {
-      // Surface error for visibility and fall back to Dynamic
       const msg = typeof err?.message === 'string' ? err.message : 'Failed to connect. Please check MetaMask popup.';
       setConnectError(msg);
       openDynamicAuth();
@@ -120,19 +113,6 @@ export default function DynamicAuthModal({ isOpen, onClose }: DynamicAuthModalPr
     disconnect();
     onClose();
   };
-
-  if (isLoading) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gold mx-auto mb-4"></div>
-            <p className="text-gray-600">Connecting wallet...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (isConnected && wallet) {
     return (
@@ -250,31 +230,22 @@ export default function DynamicAuthModal({ isOpen, onClose }: DynamicAuthModalPr
     );
   }
 
-  // Not connected - show connect options
+  // Not connected - show connect options immediately (no blocking loader)
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
         <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-xl font-semibold text-gray-900">Connect Wallet</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="p-6 space-y-3">
-          <button
-            onClick={() => void openDynamicAuth()}
-            className="w-full bg-gold hover:bg-yellow-500 text-gray-900 font-medium py-2 px-4 rounded-lg transition-colors"
-          >
+          <button onClick={() => void openDynamicAuth()} className="w-full bg-gold hover:bg-yellow-500 text-gray-900 font-medium py-2 px-4 rounded-lg transition-colors">
             Connect wallet
           </button>
-          <button
-            onClick={() => void directConnectXRPL()}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
-          >
+          <button onClick={() => void directConnectXRPL()} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors">
             Connect with MetaMask (XRPL EVM)
           </button>
           {connectError && (

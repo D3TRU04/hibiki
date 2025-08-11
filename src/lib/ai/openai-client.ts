@@ -5,13 +5,13 @@ export interface OpenAIResponse {
 }
 
 export class OpenAIClient {
-  private apiKey: string;
+  private apiKey: string | undefined;
   private baseUrl: string = 'https://api.openai.com/v1';
 
-  constructor(apiKey?: string) {
-    this.apiKey = apiKey || process.env.OPENAI_API_KEY || '';
+  constructor() {
+    this.apiKey = process.env.OPENAI_API_KEY;
     if (!this.apiKey) {
-      console.warn('OpenAI API key not found. AI summarization will be simulated.');
+      // OpenAI API key not found. AI summarization will be simulated.
     }
   }
 
@@ -55,7 +55,7 @@ export class OpenAIClient {
       const data = await response.json();
       return data.choices[0]?.message?.content || 'Unable to generate summary';
     } catch (error) {
-      console.error('OpenAI API call failed:', error);
+      // Fallback to simulation if API fails
       return this.simulateCompletion(prompt);
     }
   }

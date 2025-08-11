@@ -8,10 +8,10 @@ import { aiSummaryService } from '@/lib/ai/ai-summary';
 
 interface StoryFeedProps {
   posts: KleoPost[];
-  onPostClick?: (post: KleoPost) => void;
+  onPostClick?: (_post: KleoPost) => void;
   selectedTag?: string;
   selectedType?: string;
-  onFilterChange?: (filters: { tag?: string; type?: string }) => void;
+  onFilterChange?: (_filters: { tag?: string; type?: string }) => void;
 }
 
 type FilterType = 'all' | 'video' | 'news' | 'text';
@@ -22,6 +22,21 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
   const [searchTerm, setSearchTerm] = useState(selectedTag || '');
   const [showFilters, setShowFilters] = useState(false);
   const [locationSummary, setLocationSummary] = useState<{ summary: string; videos: string[]; title: string } | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Update filtered posts when posts change
+  useEffect(() => {
+    setFilteredPosts(posts);
+  }, [posts]);
+
+  // Simulate loading state for better UX
+  useEffect(() => {
+    if (posts.length === 0) {
+      setIsLoading(true);
+      const timer = setTimeout(() => setIsLoading(false), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [posts.length]);
 
   useEffect(() => {
     let filtered = posts;
@@ -110,13 +125,13 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
+    <div className="bg-transparent rounded-lg p-6">
       {locationSummary && (
         <div className="mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">{locationSummary.title}</h3>
+          <h3 className="text-lg font-semibold text-white mb-2">{locationSummary.title}</h3>
           <div className="flex gap-3">
-            <div className="flex-1 text-sm text-gray-800 leading-relaxed max-h-40 overflow-auto">
-              <div className="font-medium mb-1">AI Summary</div>
+            <div className="flex-1 text-sm text-gray-300 leading-relaxed max-h-40 overflow-auto">
+              <div className="font-medium mb-1 text-gold">AI Summary</div>
               <div>{locationSummary.summary}</div>
             </div>
             <div className="w-40 space-y-2">
@@ -131,15 +146,35 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
       )}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Global Feed</h2>
-          <p className="text-gray-600 text-sm">
+          <h2 className="text-2xl font-bold text-white">Global Feed</h2>
+          <p className="text-gray-300 text-sm">
             {filteredPosts.length} of {posts.length} stories
           </p>
+          {posts.length === 0 && (
+            <p className="text-xs text-gray-400 mt-1">
+              No posts available yet
+            </p>
+          )}
         </div>
-        <button onClick={() => setShowFilters(!showFilters)} className="flex items-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
-          <Filter className="w-4 h-4" />
-          <span className="text-sm font-medium">Filters</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button 
+            onClick={() => setShowFilters(!showFilters)} 
+            className="flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-white"
+          >
+            <Filter className="w-4 h-4" />
+            <span className="text-sm font-medium">Filters</span>
+          </button>
+          <button 
+            onClick={() => {
+              setSearchTerm('');
+              setActiveFilter('all');
+              onFilterChange?.({ tag: undefined, type: undefined });
+            }}
+            className="flex items-center space-x-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+          >
+            <span className="text-sm font-medium">Refresh</span>
+          </button>
+        </div>
       </div>
 
       {showFilters && (
@@ -151,7 +186,7 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
               placeholder="Search stories..."
               value={selectedTag ?? searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); onFilterChange?.({ tag: e.target.value || undefined }); }}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-gold focus:border-transparent bg-gray-800 text-white placeholder-gray-400"
             />
           </div>
 
@@ -163,7 +198,7 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
                 className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                   (selectedType || activeFilter) === filter
                     ? 'bg-gold text-gray-900'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                 }`}
               >
                 {getFilterIcon(filter)}
@@ -180,17 +215,56 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
             <StoryCard key={post.id} post={post} onClick={onPostClick ? () => onPostClick(post) : undefined} />
           ))}
         </div>
+      ) : isLoading ? (
+        <div className="text-center py-12">
+          <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-8 h-8 border-4 border-gray-600 border-t-gold rounded-full animate-spin"></div>
+          </div>
+          <h3 className="text-lg font-medium text-white mb-2">Loading stories...</h3>
+          <p className="text-gray-300">Please wait while we fetch the latest stories</p>
+        </div>
       ) : (
         <div className="text-center py-12">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
             <Search className="w-8 h-8 text-gray-400" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No stories found</h3>
-          <p className="text-gray-600">
+          <h3 className="text-lg font-medium text-white mb-2">No stories found</h3>
+          <p className="text-gray-300">
             {(selectedTag ?? searchTerm) || (selectedType ?? activeFilter) !== 'all' 
               ? 'Try adjusting your search or filters'
-              : 'Be the first to share a story at this location!'}
+              : posts.length === 0 
+                ? 'No stories have been shared yet. Be the first to share a story!'
+                : 'No stories match your current filters'}
           </p>
+          {posts.length === 0 && (
+            <div className="mt-4 p-4 bg-blue-900/30 rounded-lg border border-blue-700">
+              <p className="text-sm text-blue-200 mb-2">
+                <strong>Getting started:</strong>
+              </p>
+              <ul className="text-xs text-blue-100 space-y-1 text-left max-w-sm mx-auto">
+                <li>• Click &quot;Share Story&quot; to add your first story</li>
+                <li>• Connect your wallet to start sharing</li>
+                <li>• Stories will appear here once shared</li>
+              </ul>
+            </div>
+          )}
+          {posts.length > 0 && filteredPosts.length === 0 && (
+            <div className="mt-4 p-4 bg-yellow-900/30 rounded-lg border border-yellow-700">
+              <p className="text-sm text-yellow-200 mb-3">
+                <strong>Tip:</strong> Try clearing your filters or adjusting your search terms
+              </p>
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setActiveFilter('all');
+                  onFilterChange?.({ tag: undefined, type: undefined });
+                }}
+                className="px-4 py-2 bg-yellow-800 hover:bg-yellow-700 text-yellow-100 text-sm rounded-lg transition-colors"
+              >
+                Clear All Filters
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

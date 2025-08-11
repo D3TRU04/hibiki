@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useDynamicContext } from '@dynamic-labs/sdk-react';
-import { Trophy, Coins, TrendingUp } from 'lucide-react';
+import { Trophy, Coins } from 'lucide-react';
 import { getUserXP } from '@/lib/rewards/rewards';
 
-function getLevelTitle(_: number): string { return 'Level'; }
-function getClaimableRLUSD(_: string): number { return 0; }
+function getLevelTitle(_level: number): string { return 'Level'; }
+function getClaimableRLUSD(_address: string): number { return 0; }
 
 export default function UserPanelRewards() {
   const { primaryWallet, user } = useDynamicContext();
@@ -28,9 +27,10 @@ export default function UserPanelRewards() {
 
   const handleClaimRLUSD = () => {
     if (claimableRLUSD > 0) {
-      alert(`Claiming ${claimableRLUSD} RLUSD! (This would trigger a smart contract call in production)`);
+      // TODO: Implement actual smart contract call for claiming RLUSD
+      // For now, silently handle the claim action
     } else {
-      alert('No RLUSD available to claim. Keep contributing to earn more!');
+      // No RLUSD available to claim
     }
   };
 

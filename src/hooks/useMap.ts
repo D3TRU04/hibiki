@@ -17,8 +17,8 @@ export function useMap() {
 
   const setPosts = useCallback((updater: Post[] | ((prev: Post[]) => Post[])) => {
     if (typeof updater === 'function') {
-      setPostsState(prev => {
-        const newPosts = updater(prev);
+      setPostsState(prevPosts => {
+        const newPosts = updater(prevPosts);
         postsRef.current = newPosts;
         return newPosts;
       });
@@ -29,8 +29,6 @@ export function useMap() {
   }, []);
 
   const loadPosts = useCallback(async () => {
-    console.log('🔄 Starting to load posts...');
-    
     // Instant cache hydrate (subsequent visits)
     try {
       if (typeof window !== 'undefined') {
@@ -38,7 +36,6 @@ export function useMap() {
         if (raw) {
           const cached = JSON.parse(raw) as { posts: Post[]; ts: number };
           if (Array.isArray(cached.posts)) {
-            console.log(`📋 Using cached posts: ${cached.posts.length} posts`);
             setPosts(cached.posts);
           }
         }
@@ -47,9 +44,7 @@ export function useMap() {
 
     setIsLoading(true);
     try {
-      console.log('📡 Fetching posts from API...');
       const kleoPosts = await getPosts();
-      console.log(`📊 API returned ${kleoPosts.length} KleoPosts`);
       
       const convertedPosts: Post[] = kleoPosts.map(kleoPost => {
         const post: Post = {
@@ -69,12 +64,8 @@ export function useMap() {
           tags: [],
         };
         
-        console.log(`📍 Converting post ${post.id}: lat=${post.lat}, lng=${post.lng}`);
         return post;
       });
-      
-      console.log(`✅ Converted ${convertedPosts.length} posts to Post format`);
-      console.log(`📍 Posts with valid coordinates:`, convertedPosts.filter(p => p.lat != null && p.lng != null).length);
       
       setPosts(convertedPosts);
       try {
@@ -83,7 +74,7 @@ export function useMap() {
         }
       } catch {}
     } catch (error) {
-      console.error('❌ Error loading posts:', error);
+      // Handle error silently
     } finally {
       setIsLoading(false);
     }

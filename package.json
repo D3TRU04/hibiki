@@ -4,9 +4,16 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:fast": "NODE_OPTIONS='--max-old-space-size=4096 --experimental-json-modules --no-warnings' next dev --turbo",
+    "dev:clean": "npm run clean && npm run dev:fast",
     "build": "next build",
+    "build:fast": "NODE_OPTIONS='--max-old-space-size=4096' next build",
     "start": "next start",
     "lint": "next lint",
+    "lint:fix": "next lint --fix",
+    "rebuild": "npm rebuild",
+    "clean": "rm -rf .next && rm -rf node_modules/.cache",
+    "build:clean": "npm run clean && npm run build:fast",
     "deploy:contract": "npx hardhat run scripts/deploy-nft.js --network rippleEVMTestnet",
     "deploy:contract:mainnet": "npx hardhat run scripts/deploy-nft.js --network rippleEVMMainnet",
     "compile:contract": "npx hardhat compile",
@@ -14,10 +21,11 @@
     "verify:contract": "npx hardhat verify --network rippleEVMTestnet"
   },
   "dependencies": {
-    "@dynamic-labs/ethereum": "^4.25.10",
+    "@dynamic-labs/ethereum": "^0.18.30",
     "@dynamic-labs/sdk-react": "^0.18.30",
     "@react-native-async-storage/async-storage": "^1.24.0",
     "@supabase/supabase-js": "^2.54.0",
+    "@tailwindcss/line-clamp": "^0.4.4",
     "lucide-react": "^0.536.0",
     "mapbox-gl": "^3.14.0",
     "next": "15.4.5",
@@ -36,10 +44,13 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.21",
+    "buffer": "^6.0.3",
+    "crypto-browserify": "^3.12.0",
     "dotenv": "^17.2.1",
     "eslint": "^9",
     "eslint-config-next": "15.4.5",
     "hardhat": "^2.26.2",
+    "stream-browserify": "^3.0.0",
     "tailwindcss": "^4.1.11",
     "typescript": "^5"
   }

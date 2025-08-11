@@ -21,7 +21,7 @@ interface MapModalsProps {
   onCloseSubmissionForm: () => void;
   onCloseAuthModal: () => void;
   onCloseNFTNotification: () => void;
-  onPostCreated: (post: KleoPost) => void;
+  onPostCreated: (_post: KleoPost) => void;
 }
 
 export default function MapModals({

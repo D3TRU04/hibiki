@@ -62,6 +62,7 @@ export function createPostPopupEl(props: { contributor_id?: string; ai_summary?:
 
 export function debounce<TArgs extends unknown[]>(fn: (...args: TArgs) => void, delay = 100) {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  // eslint-disable-next-line no-unused-vars
   function debounced(this: unknown, ...args: TArgs) {
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => fn.apply(this, args), delay);

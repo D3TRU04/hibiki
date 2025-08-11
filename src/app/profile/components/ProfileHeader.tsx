@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { memo } from 'react';
 import { User, Star, MapPin, Calendar, Trophy, Coins, MessageSquare } from 'lucide-react';
 import { GraphQLUser, GraphQLPost } from '@/lib/graph/graph-client';
 import { getWalletDisplayName } from '@/lib/identity';
@@ -13,7 +12,7 @@ interface ProfileHeaderProps {
   isOwnProfile: boolean;
 }
 
-export default function ProfileHeader({ 
+function ProfileHeader({ 
   walletAddress, 
   userProfile, 
   userPosts, 
@@ -78,7 +77,7 @@ export default function ProfileHeader({
 
       {userProfile && (
         <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white/5 rounded-lg p-4">
+          {/* <div className="bg-white/5 rounded-lg p-4">
             <div className="flex items-center space-x-2 text-gray-300">
               <Calendar className="w-4 h-4" />
               <span className="text-sm">Last Active</span>
@@ -86,7 +85,7 @@ export default function ProfileHeader({
             <p className="text-white font-medium">
               {userProfile.last_activity ? formatDate(userProfile.last_activity) : 'Never'}
             </p>
-          </div>
+          </div> */}
           <div className="bg-white/5 rounded-lg p-4">
             <div className="flex items-center space-x-2 text-gray-300">
               <Star className="w-4 h-4" />
@@ -107,4 +106,6 @@ export default function ProfileHeader({
       )}
     </div>
   );
-} 
+}
+
+export default memo(ProfileHeader); 

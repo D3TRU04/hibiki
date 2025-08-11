@@ -58,10 +58,8 @@ export class PinataStorageService {
     try {
       const fileWithMetadata = new File([file], file.name, { type: file.type, lastModified: Date.now() });
       const cid = await pinFileToIPFS(fileWithMetadata);
-      console.log('File uploaded to IPFS via Pinata:', cid);
       return cid;
     } catch (error) {
-      console.error('Error uploading to Pinata:', error);
       throw error;
     }
   }
@@ -82,7 +80,6 @@ export class PinataStorageService {
 
       return cid;
     } catch (error) {
-      console.error('Error uploading post metadata to Pinata:', error);
       throw error;
     }
   }

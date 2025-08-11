@@ -2,7 +2,6 @@
 
 import NavbarDesktop from '@/components/NavbarDesktop';
 import NavbarActions from '@/components/NavbarActions';
-import NavbarMobile from '@/components/NavbarMobile';
 import type { Wallet as KleoWallet } from '@/lib/types';
 
 interface GlassyNavbarProps {
@@ -13,6 +12,9 @@ interface GlassyNavbarProps {
   isAuthenticated?: boolean;
   wallet?: KleoWallet | null;
   onDisconnect?: () => void;
+  showStoryFeed?: boolean;
+  showUserPanel?: boolean;
+  postCount?: number;
 }
 
 export default function GlassyNavbar({ 
@@ -22,12 +24,15 @@ export default function GlassyNavbar({
   onToggleUserPanel,
   isAuthenticated = false,
   wallet = null,
-  onDisconnect
+  onDisconnect,
+  showStoryFeed = false,
+  showUserPanel = false,
+  postCount = 0
 }: GlassyNavbarProps) {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 px-4 py-3">
-      {/* Glassmorphism backdrop */}
-      <div className="absolute inset-0 bg-white/10 backdrop-blur-md border-b border-white/20 shadow-lg" />
+      {/* Simple backdrop */}
+      <div className="absolute inset-0 bg-white/10 border-b border-white/20 shadow-lg" />
       
       {/* Navbar content */}
       <div className="relative flex items-center justify-between max-w-7xl mx-auto">
@@ -40,13 +45,7 @@ export default function GlassyNavbar({
         </div>
 
         {/* Desktop Navigation */}
-        <NavbarDesktop
-          onAddStory={onAddStory}
-          onAuthClick={onAuthClick}
-          onToggleFeed={onToggleFeed}
-          onToggleUserPanel={onToggleUserPanel}
-          isAuthenticated={isAuthenticated}
-        />
+        <NavbarDesktop />
 
         {/* CTA Buttons */}
         <div className="flex items-center space-x-4">
@@ -58,16 +57,11 @@ export default function GlassyNavbar({
             isAuthenticated={isAuthenticated}
             wallet={wallet}
             onDisconnect={onDisconnect}
+            showStoryFeed={showStoryFeed}
+            showUserPanel={showUserPanel}
+            postCount={postCount}
           />
-          <a href="/leaderboard" className="hidden md:block px-3 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 rounded-lg text-white text-sm transition-all">Leaderboard</a>
-          
-          <NavbarMobile
-            onAddStory={onAddStory}
-            onAuthClick={onAuthClick}
-            onToggleFeed={onToggleFeed}
-            onToggleUserPanel={onToggleUserPanel}
-            isAuthenticated={isAuthenticated}
-          />
+          <a href="/leaderboard" className="hidden md:block px-3 py-2 bg-white/20 hover:bg-white/30 border border-white/30 rounded-lg text-white text-sm transition-colors">Leaderboard</a>
         </div>
       </div>
     </nav>
