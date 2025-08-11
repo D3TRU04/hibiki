@@ -44,7 +44,23 @@ NEXT_PUBLIC_SUBGRAPH_URL=https://api.studio.thegraph.com/query/<subgraph-id>/<ve
 
 # XRPL (NFT minting and XRP reward simulation)
 XRPL_RPC_URL=wss://s.altnet.rippletest.net:51233
-XRPL_WALLET_SEED=sn... # Testnet seed for the minter
+XRPL_WALLET_SEED=sn... # Testnet seed for the server-side funder wallet
+
+# Rewards simulation tuning (optional)
+# Drops per point: 1 XRP = 1,000,000 drops. Defaults: 10,000 drops (0.01 XRP) per point
+XRPL_DROPS_PER_POINT=10000
+# Max per transaction (drops). Default: 1,000,000 drops (1 XRP)
+XRPL_MAX_DROPS_PER_TX=1000000
+# Minimum amount (drops). Default: 1000 drops (0.001 XRP)
+XRPL_MIN_DROPS=1000
+
+# EVM reward tuning (optional)
+# Wei per point on Ripple EVM testnet (18 decimals). Default ~0.01 XRP
+EVM_WEI_PER_POINT=10000000000000000
+# Max per tx in wei. Default 1 XRP
+EVM_MAX_WEI_PER_TX=1000000000000000000
+# Min per tx in wei. Default 0.0001 XRP
+EVM_MIN_WEI=100000000000000
 
 # Optional: EVM sidechain (Ripple EVM Testnet) – only if you use ERC‑721 flow
 RIPPLE_EVM_RPC_URL=https://rpc-evm-sidechain.xrpl.org
@@ -91,7 +107,7 @@ Notes:
 #### F) XRPL Testnet (Default NFT path)
 - Get a testnet wallet and fund it via the XRPL faucet.
 - Set `XRPL_RPC_URL` to testnet (`wss://s.altnet.rippletest.net:51233`).
-- Set `XRPL_WALLET_SEED` for the minter/airdrop sender used by `xrplNFTService`.
+- Set `XRPL_WALLET_SEED` for the minter/airdrop sender used by `xrplNFTService` and rewards API.
 - Ensure the wallet has enough test XRP to mint and simulate rewards.
 
 #### G) Ripple EVM Sidechain (Optional ERC‑721 path)

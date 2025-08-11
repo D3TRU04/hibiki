@@ -14,6 +14,9 @@ export default function StoryCard({ post, onClick, locationLabel }: StoryCardPro
   const summary = post.ai_summary || '';
   const createdAt = post.created_at ? new Date(post.created_at) : new Date();
   const typeLabel = post.type === 'video' ? 'Video' : post.type === 'news' ? 'News' : 'Text';
+  const sourceUrl = post.source_url;
+  let sourceHost: string | null = null;
+  try { sourceHost = sourceUrl ? new URL(sourceUrl).hostname.replace(/^www\./, '') : null; } catch { sourceHost = null; }
 
   return (
     <div
@@ -29,9 +32,23 @@ export default function StoryCard({ post, onClick, locationLabel }: StoryCardPro
             {createdAt.toLocaleDateString()}
           </span>
         </div>
-        <h3 className="text-base font-semibold text-white/95 leading-snug line-clamp-2 mb-1">
+        <h3 className="text-base font-normal text-white/95 leading-snug line-clamp-2 mb-1">
           {content.length > 140 ? `${content.substring(0, 140)}...` : content}
         </h3>
+        {post.content_type === 'news' && sourceUrl && (
+          <div className="mt-1 mb-2 text-xs">
+            <a
+              href={sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-blue-300 hover:text-blue-200 underline underline-offset-2 break-all line-clamp-1"
+              onClick={(e) => e.stopPropagation()}
+              title={sourceUrl}
+            >
+              {sourceHost ? `${sourceHost} • ` : ''}{sourceUrl}
+            </a>
+          </div>
+        )}
         {locationLabel && (
           <div className="mt-1 mb-2 inline-flex items-center gap-1 text-[11px] text-gray-300">
             <MapPin className="w-3 h-3 text-gold" />
@@ -39,7 +56,7 @@ export default function StoryCard({ post, onClick, locationLabel }: StoryCardPro
           </div>
         )}
         {summary && (
-          <p className="text-sm text-gray-300 line-clamp-3">
+          <p className="text-sm text-gray-300/95 line-clamp-3">
             {summary}
           </p>
         )}

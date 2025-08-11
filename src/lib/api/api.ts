@@ -1,5 +1,5 @@
 import { ipfsStorage } from '../storage/ipfs-storage';
-import { xrplWallet, distributeRewards } from '../wallet/xrpl-wallet';
+import { xrplWallet, distributeRewards, distributeEvmRewards } from '../wallet/xrpl-wallet';
 import { Post, CreatePostData, User, RewardSystem, XRPLWallet, KleoPost, Wallet, PostSubmission } from '../types';
 import { simpleRateLimiter } from '../rewards/rate-limiter';
 
@@ -346,6 +346,23 @@ export async function createKleoPost(postData: PostSubmission, wallet: Wallet): 
     addUserXP(wallet.address, points);
     await recordPostProof(kleoPost.ipfs_metadata_url!, wallet.address);
 
+    // Best-effort reward payment (XRPL L1 or EVM sidechain)
+    try {
+      if (user?.xrpl_address) {
+        // XRPL L1 path
+        const rewardRes = await distributeRewards(user.xrpl_address, points, 'Kleo: content contribution reward');
+        if (typeof window !== 'undefined' && rewardRes && (rewardRes as any).ok) {
+          sessionStorage.setItem('kleo_last_reward_tx', JSON.stringify({ ...(rewardRes as any), chain: 'xrpl' }));
+        }
+      } else if (wallet?.address && wallet.address.startsWith('0x')) {
+        // EVM sidechain fallback
+        const evmRes = await distributeEvmRewards(wallet.address, points);
+        if (typeof window !== 'undefined' && evmRes && (evmRes as any).ok) {
+          sessionStorage.setItem('kleo_last_reward_tx', JSON.stringify({ ...(evmRes as any), chain: 'evm' }));
+        }
+      }
+    } catch {}
+
     return kleoPost;
 
   } catch (error) {
@@ -467,17 +484,24 @@ export async function getWalletBalance(address: string): Promise<number> {
 export async function claimRewards(userId: string): Promise<boolean> {
   try {
     const user = await getCurrentUser();
-    if (!user || !user.xrpl_address) {
-      throw new Error('User not found or no XRPL address configured');
-    }
+    if (!user) throw new Error('User not found');
 
     const rewardSystem = await getRewardSystem(userId);
     if (!rewardSystem || rewardSystem.pending_rewards <= 0) {
       throw new Error('No rewards available to claim');
     }
 
-    // Distribute rewards
-    const success = await distributeRewards(user.xrpl_address, user.contribution_points);
+    // Distribute rewards (XRPL preferred, fallback to EVM if wallet_address is 0x)
+    let success = false;
+    if (user.xrpl_address) {
+      const res = await distributeRewards(user.xrpl_address, user.contribution_points);
+      success = !!(res && (res as any).ok);
+    } else if (user.wallet_address && user.wallet_address.startsWith('0x')) {
+      const res = await distributeEvmRewards(user.wallet_address, user.contribution_points);
+      success = !!(res && (res as any).ok);
+    } else {
+      throw new Error('No payout address configured');
+    }
     
     if (success) {
       // Reset contribution points after successful reward distribution

@@ -35,9 +35,9 @@ export default function MapSidebar({
   }
 
   return (
-    <div className="w-96 h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-800/60 via-gray-900/80 to-black/90 backdrop-blur-xl border-l border-white/10 shadow-[0_0_30px_rgba(0,0,0,0.35)] flex flex-col overflow-hidden sidebar-transition">
+    <div className="w-96 h-full bg-gray-900/95 backdrop-blur-sm border-l border-gray-800 shadow-[0_0_30px_rgba(0,0,0,0.45)] flex flex-col overflow-hidden sidebar-transition">
       {showUserPanel && (
-        <div className="p-4 border-b border-white/10 relative">
+        <div className="p-4 border-b border-gray-800 relative">
           <button
             onClick={onCloseUserPanel}
             className="absolute top-2 right-2 inline-flex items-center justify-center h-8 w-8 rounded-full text-gray-300 hover:text-white hover:bg-white/10 ring-1 ring-inset ring-white/10 transition"

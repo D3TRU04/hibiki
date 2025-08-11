@@ -99,22 +99,12 @@ export class AuthService {
   }
 
   async connectXRPLWallet(address: string): Promise<User | null> {
-    if (!this.currentUser) {
-      throw new Error('No user logged in');
-    }
-
     try {
-      const updatedUser = await updateUser(this.currentUser.id, {
-        xrpl_address: address
-      });
-
-      if (updatedUser) {
-        this.currentUser = updatedUser;
-      }
-
-      return updatedUser;
-    } catch (error) {
-      throw error;
+      const current = this.currentUser;
+      const updated = await updateUser(current?.id || address, { xrpl_address: address });
+      return updated;
+    } catch {
+      return null;
     }
   }
 

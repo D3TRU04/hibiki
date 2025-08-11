@@ -40,7 +40,7 @@ export default function NavbarActions({
           {/* My Profile Link */}
           <Link
             href={`/profile/${wallet.address}`}
-            className="hidden md:flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 border border-white/30 rounded-lg text-white font-medium transition-colors"
+            className="hidden md:flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 border border-white/30 rounded-lg text-white text-sm font-normal transition-colors"
           >
             <UserCheck size={16} />
             <span>My Profile</span>
@@ -49,7 +49,7 @@ export default function NavbarActions({
           <button
             onClick={onToggleUserPanel}
             title={showUserPanel ? "Hide user panel" : "Show user profile panel"}
-            className={`hidden md:flex items-center space-x-2 px-4 py-2 border rounded-lg text-white font-medium transition-colors ${
+            className={`hidden md:flex items-center space-x-2 px-4 py-2 border rounded-lg text-white text-sm font-normal transition-colors ${
               showUserPanel 
                 ? 'bg-white/40 border-white/50' 
                 : 'bg-white/20 hover:bg-white/30 border-white/30'
@@ -62,7 +62,7 @@ export default function NavbarActions({
           <button
             onClick={onToggleFeed}
             title={showStoryFeed ? "Hide feed" : "Show global story feed"}
-            className={`hidden md:flex items-center space-x-2 px-4 py-2 border rounded-lg text-white font-medium transition-colors ${
+            className={`hidden md:flex items-center space-x-2 px-4 py-2 border rounded-lg text-white text-sm font-normal transition-colors ${
               showStoryFeed 
                 ? 'bg-white/40 border-white/50' 
                 : 'bg-white/20 hover:bg-white/30 border-white/30'
@@ -77,7 +77,7 @@ export default function NavbarActions({
             )}
           </button>
           
-          <div className="hidden md:flex items-center space-x-2 px-4 py-2 bg-white/20 border border-white/30 rounded-lg text-white font-medium">
+          <div className="hidden md:flex items-center space-x-2 px-4 py-2 bg-white/20 border border-white/30 rounded-lg text-white text-sm font-normal">
             <User size={16} />
             <span className="max-w-[120px] truncate">
               {wallet.ensName || wallet.address}
@@ -86,7 +86,7 @@ export default function NavbarActions({
           
           <button
             onClick={handleDisconnect}
-            className="hidden md:flex items-center space-x-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-300/30 rounded-lg text-red-200 font-medium transition-colors"
+            className="hidden md:flex items-center space-x-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-300/30 rounded-lg text-red-200 text-sm font-normal transition-colors"
           >
             <LogOut size={16} />
             <span>Disconnect</span>
@@ -97,7 +97,7 @@ export default function NavbarActions({
           <button
             onClick={onToggleFeed}
             title={showStoryFeed ? "Hide feed" : "Show global story feed"}
-            className={`hidden md:flex items-center space-x-2 px-4 py-2 border rounded-lg text-white font-medium transition-colors ${
+            className={`hidden md:flex items-center space-x-2 px-4 py-2 border rounded-lg text-white text-sm font-normal transition-colors ${
               showStoryFeed 
                 ? 'bg-white/40 border-white/50' 
                 : 'bg-white/20 hover:bg-white/30 border-white/30'
@@ -114,7 +114,7 @@ export default function NavbarActions({
           
           <button
             onClick={onAuthClick}
-            className="hidden md:flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 border border-white/30 rounded-lg text-white font-medium transition-colors"
+            className="hidden md:flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 border border-white/30 rounded-lg text-white text-sm font-normal transition-colors"
           >
             <User size={16} />
             <span>Connect Wallet</span>
@@ -125,7 +125,7 @@ export default function NavbarActions({
       <button
         onClick={onAddStory}
         aria-label="Share a story"
-        className="hidden md:flex items-center space-x-2 px-4 py-2 bg-yellow-400 hover:bg-yellow-500 border border-yellow-300 rounded-lg text-gray-900 font-medium transition-colors"
+        className="hidden md:flex items-center space-x-2 px-4 py-2 bg-yellow-400 hover:bg-yellow-500 border border-yellow-300 rounded-lg text-gray-900 text-sm font-normal transition-colors"
       >
         <Sparkles size={16} />
         <span>Share Story</span>

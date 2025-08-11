@@ -126,10 +126,10 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
           aiSummaryService.generateSummary({ mediaType: 'news', content: newsText || 'No news content provided.' }),
           reverseGeocode(latNum, lngNum)
         ]);
-        const title = placeName ? placeName : `Location ${chosenKey}`;
+        const title = placeName ? placeName : 'Location:';
         setLocationSummary({ summary: ai.summary, videos: videos.slice(0, 3), title });
       } catch {
-        const title = `Location ${chosenKey}`;
+        const title = 'Location:';
         setLocationSummary({ summary: 'Summary unavailable.', videos: videos.slice(0, 3), title });
       }
     })();
@@ -206,10 +206,10 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
           </div>
         </div>
       )}
-      <div className="sticky top-0 z-10 -mx-6 px-6 pb-4 mb-4 backdrop-blur-md bg-black/30 border-b border-white/10">
+      <div className="sticky top-0 z-10 -mx-6 px-6 py-3 mb-3 backdrop-blur-md bg-black/30 border-b border-white/10">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-normal text-white tracking-tight">Global Feed</h2>
+            <h2 className="text-2xl font-normal text-white tracking-tight leading-tight">Global Feed</h2>
             <p className="text-gray-300 text-sm">
               {filteredPosts.length} of {posts.length} stories
             </p>

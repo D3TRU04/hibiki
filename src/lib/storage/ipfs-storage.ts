@@ -113,6 +113,14 @@ export class IPFSStorageService {
       ipfs_metadata_url: kleoPost.ipfs_metadata_url
     };
 
+    // Persist news metadata onto Post so feed can render
+    if (kleoPost.source_url) {
+      (post as any).source_url = kleoPost.source_url;
+    }
+    if (kleoPost.content_type) {
+      (post as any).content_type = kleoPost.content_type;
+    }
+
     // Store locally
     if (post.id) {
       localPosts.set(post.id, post);
