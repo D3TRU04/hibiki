@@ -187,6 +187,21 @@ export async function createKleoPost(postData: PostSubmission, wallet: Wallet): 
           source_url: postData.news_url,
           fast_submit: true,
         };
+
+        // Minimal AI summary in fast path using user's description (short timeout)
+        try {
+          const ai = (await import('../ai/ai-summary')).aiSummaryService;
+          const quickSummary = await withTimeout(
+            ai.generateSummary({ mediaType: 'news', content: postData.content || '', url: postData.news_url }),
+            2000,
+            { summary: undefined, confidence: 0.6 } as unknown as { summary?: string; confidence: number }
+          );
+          if (quickSummary?.summary) {
+            kleoPost.ai_summary = quickSummary.summary;
+            // Use confidence heuristic as a lightweight credibility score
+            (kleoPost as any).credibility_score = Math.round((quickSummary.confidence || 0.6) * 100);
+          }
+        } catch {}
       } else {
         // Handle news article submission (with timeouts and graceful fallbacks)
         const newsFetcher = (await import('../news/news-fetcher')).newsFetcherService;
@@ -292,6 +307,19 @@ export async function createKleoPost(postData: PostSubmission, wallet: Wallet): 
         updated_at: new Date().toISOString(),
         content_type: 'media',
       } as KleoPost;
+
+      // Generate a short AI summary for text/media content (best-effort)
+      try {
+        const ai = (await import('../ai/ai-summary')).aiSummaryService;
+        const s = await withTimeout(
+          ai.generateSummary({ mediaType: 'news', content: postData.content || '' }),
+          2000,
+          { summary: undefined, confidence: 0.5 } as unknown as { summary?: string; confidence: number }
+        );
+        if (s?.summary) {
+          (kleoPost as any).ai_summary = s.summary;
+        }
+      } catch {}
     }
 
     // Upload post metadata to IPFS (Pinata) & mint NFT
