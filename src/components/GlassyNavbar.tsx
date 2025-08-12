@@ -39,9 +39,9 @@ export default function GlassyNavbar({
         {/* Logo */}
         <div className="flex items-center space-x-2">
           <div className="w-8 h-8 bg-gradient-to-br from-gold to-yellow-400 rounded-lg flex items-center justify-center">
-            <span className="text-gray-900 font-bold text-sm">K</span>
+            <span className="text-gray-900 font-normal text-sm">K</span>
           </div>
-          <span className="text-white font-semibold text-lg">Kleo</span>
+          <span className="text-white font-normal text-lg">Kleo</span>
         </div>
 
         {/* Desktop Navigation */}
@@ -61,7 +61,7 @@ export default function GlassyNavbar({
             showUserPanel={showUserPanel}
             postCount={postCount}
           />
-          <a href="/leaderboard" className="hidden md:block px-3 py-2 bg-white/20 hover:bg-white/30 border border-white/30 rounded-lg text-white text-sm transition-colors">Leaderboard</a>
+          <a href="/leaderboard" className="hidden md:flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 border border-white/30 rounded-lg text-white text-sm font-normal transition-colors">Leaderboard</a>
         </div>
       </div>
     </nav>

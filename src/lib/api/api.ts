@@ -1,5 +1,5 @@
 import { ipfsStorage } from '../storage/ipfs-storage';
-import { xrplWallet, distributeRewards } from '../wallet/xrpl-wallet';
+import { xrplWallet, distributeRewards, distributeEvmRewards } from '../wallet/xrpl-wallet';
 import { Post, CreatePostData, User, RewardSystem, XRPLWallet, KleoPost, Wallet, PostSubmission } from '../types';
 import { simpleRateLimiter } from '../rewards/rate-limiter';
 
@@ -187,6 +187,21 @@ export async function createKleoPost(postData: PostSubmission, wallet: Wallet): 
           source_url: postData.news_url,
           fast_submit: true,
         };
+
+        // Minimal AI summary in fast path using user's description (short timeout)
+        try {
+          const ai = (await import('../ai/ai-summary')).aiSummaryService;
+          const quickSummary = await withTimeout(
+            ai.generateSummary({ mediaType: 'news', content: postData.content || '', url: postData.news_url }),
+            2000,
+            { summary: undefined, confidence: 0.6 } as unknown as { summary?: string; confidence: number }
+          );
+          if (quickSummary?.summary) {
+            kleoPost.ai_summary = quickSummary.summary;
+            // Use confidence heuristic as a lightweight credibility score
+            (kleoPost as any).credibility_score = Math.round((quickSummary.confidence || 0.6) * 100);
+          }
+        } catch {}
       } else {
         // Handle news article submission (with timeouts and graceful fallbacks)
         const newsFetcher = (await import('../news/news-fetcher')).newsFetcherService;
@@ -292,6 +307,19 @@ export async function createKleoPost(postData: PostSubmission, wallet: Wallet): 
         updated_at: new Date().toISOString(),
         content_type: 'media',
       } as KleoPost;
+
+      // Generate a short AI summary for text/media content (best-effort)
+      try {
+        const ai = (await import('../ai/ai-summary')).aiSummaryService;
+        const s = await withTimeout(
+          ai.generateSummary({ mediaType: 'news', content: postData.content || '' }),
+          2000,
+          { summary: undefined, confidence: 0.5 } as unknown as { summary?: string; confidence: number }
+        );
+        if (s?.summary) {
+          (kleoPost as any).ai_summary = s.summary;
+        }
+      } catch {}
     }
 
     // Upload post metadata to IPFS (Pinata) & mint NFT
@@ -313,10 +341,26 @@ export async function createKleoPost(postData: PostSubmission, wallet: Wallet): 
 
     // Record XP and proofs
     const { calculateRewardPoints, addUserXP, recordPostProof } = await import('../rewards/rewards');
-    const user = await getCurrentUser(); // Get user for email bonus
+    const user = await getCurrentUser();
+    
     const points = calculateRewardPoints(kleoPost, { wallet_address: wallet.address, email: user?.email } as User);
     addUserXP(wallet.address, points);
     await recordPostProof(kleoPost.ipfs_metadata_url!, wallet.address);
+
+    // Best-effort reward payment (XRPL L1 or EVM sidechain)
+    try {
+      if (user?.xrpl_address) {
+        const rewardRes = await distributeRewards(user.xrpl_address, points, 'Kleo: content contribution reward');
+        if (typeof window !== 'undefined' && rewardRes && (rewardRes as any).ok) {
+          sessionStorage.setItem('kleo_last_reward_tx', JSON.stringify({ ...(rewardRes as any), chain: 'xrpl' }));
+        }
+      } else if (wallet?.address && wallet.address.startsWith('0x')) {
+        const evmRes = await distributeEvmRewards(wallet.address, points);
+        if (typeof window !== 'undefined' && evmRes && (evmRes as any).ok) {
+          sessionStorage.setItem('kleo_last_reward_tx', JSON.stringify({ ...(evmRes as any), chain: 'evm' }));
+        }
+      }
+    } catch {}
 
     return kleoPost;
 
@@ -327,17 +371,12 @@ export async function createKleoPost(postData: PostSubmission, wallet: Wallet): 
 
 export async function getCurrentUser(): Promise<User | null> {
   try {
-    // Check local storage for user session
     if (!isBrowser) return null;
-    
     const sessionData = localStorage.getItem(USER_SESSION_KEY);
     if (sessionData) {
       const user = JSON.parse(sessionData);
-      // Verify user still exists in IPFS
       const verifiedUser = await ipfsStorage.getUser(user.id);
-      if (verifiedUser) {
-        return verifiedUser;
-      }
+      if (verifiedUser) return verifiedUser;
     }
     return null;
   } catch (error) {
@@ -439,17 +478,24 @@ export async function getWalletBalance(address: string): Promise<number> {
 export async function claimRewards(userId: string): Promise<boolean> {
   try {
     const user = await getCurrentUser();
-    if (!user || !user.xrpl_address) {
-      throw new Error('User not found or no XRPL address configured');
-    }
+    if (!user) throw new Error('User not found');
 
     const rewardSystem = await getRewardSystem(userId);
     if (!rewardSystem || rewardSystem.pending_rewards <= 0) {
       throw new Error('No rewards available to claim');
     }
 
-    // Distribute rewards
-    const success = await distributeRewards(user.xrpl_address, user.contribution_points);
+    // Distribute rewards (XRPL preferred, fallback to EVM if wallet_address is 0x)
+    let success = false;
+    if (user.xrpl_address) {
+      const res = await distributeRewards(user.xrpl_address, user.contribution_points);
+      success = !!(res && (res as any).ok);
+    } else if (user.wallet_address && user.wallet_address.startsWith('0x')) {
+      const res = await distributeEvmRewards(user.wallet_address, user.contribution_points);
+      success = !!(res && (res as any).ok);
+    } else {
+      throw new Error('No payout address configured');
+    }
     
     if (success) {
       // Reset contribution points after successful reward distribution

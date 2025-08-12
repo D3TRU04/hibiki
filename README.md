@@ -1,22 +1,24 @@
 # Kleo
 
-A map-based storytelling app built with Next.js, Mapbox GL, and IPFS (Pinata). Users can connect a wallet, post geo-anchored stories, and view a global feed.
+A map‑based storytelling app built with Next.js (App Router), Mapbox GL, and IPFS. Users connect a wallet, submit geo‑anchored stories (video or news), and view a global feed.
 
-## Overview
-- Next.js App Router
-- Mapbox GL for the globe
-- Dynamic for wallet auth (EVM)
-- IPFS via Pinata for storage
-- Optional subgraph for analytics (fallback to Pinata metadata when unavailable)
+## Stack
+- Next.js 15 App Router
+- Mapbox GL JS
+- Wallet via Dynamic (EVM)
+- Storage via IPFS (Pinata or web3.storage depending on configuration)
+- Optional subgraph on The Graph for analytics
 
-## Quick Start
-1) Install
-```bash
-npm install
-```
+## Requirements
+- Node.js 18+
+- Mapbox token
+- Pinata JWT (or web3.storage token if you wire that in)
+- Dynamic environment ID
+- Optional: Ripple EVM RPC, deployer private key (for EVM rewards), XRPL seed (for XRPL rewards)
 
-2) Environment
-Create `.env.local` in the project root:
+## Environment
+Create `.env` at the project root and add the following as needed:
+
 ```env
 # Mapbox
 NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_token
@@ -24,50 +26,71 @@ NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_token
 # Dynamic (wallet auth)
 NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID=your_dynamic_env_id
 
-# Pinata (server-side, do not expose publicly)
+# Pinata (server-side)
 PINATA_JWT=your_pinata_jwt
 
-# Optional: Subgraph for profile analytics
-NEXT_PUBLIC_GRAPH_ENDPOINT=https://your-subgraph-endpoint
+# Subgraph (optional)
+NEXT_PUBLIC_SUBGRAPH_URL=https://api.studio.thegraph.com/query/<id>/<version>
 
-# Optional: EVM network info for MetaMask network add/switch
+# Ripple EVM sidechain (optional rewards on EVM)
+RIPPLE_EVM_RPC_URL=https://rpc.testnet.xrplevm.org/
+EVM_DEPLOYER_PRIVATE_KEY=0x...
 NEXT_PUBLIC_EVM_CHAIN_ID=1449000
 NEXT_PUBLIC_EVM_CHAIN_NAME=XRPL EVM Sidechain Testnet
 NEXT_PUBLIC_EVM_RPC_URL=https://rpc.testnet.xrplevm.org/
 NEXT_PUBLIC_EVM_CURRENCY=XRP
 NEXT_PUBLIC_EVM_BLOCK_EXPLORER_URL=https://explorer.testnet.xrplevm.org/
+
+# EVM reward sizing (optional; safe defaults)
+EVM_WEI_PER_POINT=10000000000000000        # 0.01 XRP
+EVM_MAX_WEI_PER_TX=1000000000000000000     # 1 XRP
+EVM_MIN_WEI=100000000000000                # 0.0001 XRP
+
+# XRPL L1 (optional rewards on XRP L1)
+XRPL_RPC_URL=wss://s.altnet.rippletest.net:51233
+XRPL_WALLET_SEED=sn...
+XRPL_DROPS_PER_POINT=10000                 # 0.01 XRP
+XRPL_MAX_DROPS_PER_TX=1000000              # 1 XRP
+XRPL_MIN_DROPS=1000                        # 0.001 XRP
 ```
 
-3) Run
+Notes:
+- Only variables prefixed with `NEXT_PUBLIC_` are exposed to the browser. Keep secrets server‑side.
+- If you disable EVM or XRPL rewards, the app still functions (posting, map, feed).
+
+## Local Development
 ```bash
+npm install
 npm run dev
+# open http://localhost:3000
 ```
-Open http://localhost:3000 and navigate to /map.
 
-## Build & Deploy
-- Build: `npm run build`
-- Start: `npm run start`
-- Vercel: connect repo, add the environment variables above, and deploy
+## Production Build
+```bash
+npm run build
+npm run start
+```
 
-Server routes used in production:
-- `POST /api/pinata/upload` – relay uploads to Pinata (files and JSON)
-- `GET  /api/pinata/list`   – list pinned CIDs for metadata sync
+## Vercel Deployment
+- Connect the repository
+- Set environment variables in the Vercel Project Settings (including server‑side secrets)
+- Deploy
+
+## Server Routes (prod)
+- POST `/api/pinata/upload` – relays uploads to Pinata
+- GET  `/api/pinata/list` – lists pinned CIDs for sync
+- POST `/api/rewards/claim` – XRPL Testnet reward (if configured)
+- POST `/api/rewards/claim-evm` – EVM Sidechain reward (if configured)
 
 ## Key Paths
-- `src/app/map/` – map view and components
-- `src/components/` – UI components (navbar, auth modal)
-- `src/hooks/` – state hooks (map, wallet)
-- `src/lib/` – storage, auth, types, API helpers
+- `src/app/map/` – map view and UI components
+- `src/lib/` – storage, rewards, wallet helpers
+- `src/app/api/` – server routes
 
-## Data Flow
-- Submissions are uploaded to IPFS via Pinata on the server route
-- Client fetches posts via the IPFS storage service
-- Profile page tries the subgraph first; if empty, it falls back to Pinata metadata
-
-## Notes
-- Keep PINATA_JWT only on the server (Vercel project env).
-- Only one Dynamic provider is mounted in `src/app/layout.tsx`.
-- Mapbox token must be set or the map will not render.
+## Operations
+- Rotate API secrets regularly
+- Ensure testnet wallets are funded before demos (XRPL seed or EVM deployer)
+- Monitor RPC health; switch RPC URLs if a provider is down
 
 ## License
 MIT

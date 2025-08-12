@@ -22,6 +22,31 @@ export default function DynamicAuthModal({ isOpen, onClose }: DynamicAuthModalPr
       setShowAuthFlow?.(true);
     } catch {}
   }, [setShowAuthFlow]);
+
+  // Safe open flow wrapper to avoid repeated initializations
+  const safeOpen = useCallback(async () => {
+    try {
+      if (isConnected) return;
+      await openDynamicAuth();
+    } catch {
+      // ignore intermittent provider errors
+    }
+  }, [isConnected, openDynamicAuth]);
+
+  // When the modal opens and user is not connected, proactively open Dynamic auth flow (non-blocking)
+  useEffect(() => {
+    if (isOpen && !isConnected) {
+      void safeOpen();
+    }
+  }, [isOpen, isConnected, safeOpen]);
+
+  // Auto-close the modal when connected
+  useEffect(() => {
+    if (isOpen && isConnected && wallet) {
+      onClose();
+    }
+  }, [isOpen, isConnected, wallet, onClose]);
+
   const [showDetails, setShowDetails] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const envChainId = (process.env.NEXT_PUBLIC_EVM_CHAIN_ID || '1449000').trim();
@@ -39,13 +64,6 @@ export default function DynamicAuthModal({ isOpen, onClose }: DynamicAuthModalPr
       setNeedsNetworkSwitch(!!current && current !== expectedChainHex);
     } catch { setNeedsNetworkSwitch(false); }
   }, [expectedChainHex, isOpen]);
-
-  // When the modal opens and user is not connected, proactively open Dynamic auth flow (non-blocking)
-  useEffect(() => {
-    if (isOpen && !isConnected) {
-      void openDynamicAuth();
-    }
-  }, [isOpen, isConnected, openDynamicAuth]);
 
   async function directConnectXRPL() {
     try {
@@ -72,6 +90,7 @@ export default function DynamicAuthModal({ isOpen, onClose }: DynamicAuthModalPr
       const accounts: string[] = await eth.request({ method: 'eth_requestAccounts' });
       if (accounts && accounts[0]) {
         (window as any).local_xrpl_wallet = { address: accounts[0], type: 'EVM', isConnected: true };
+        try { localStorage.setItem('kleo_dynamic_wallet', JSON.stringify({ address: accounts[0], type: 'EVM' })); } catch {}
         try { window.dispatchEvent(new Event('kleo_wallet_update')); } catch {}
         onClose();
         setConnectError(null);

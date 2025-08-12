@@ -23,6 +23,38 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
   const [showFilters, setShowFilters] = useState(false);
   const [locationSummary, setLocationSummary] = useState<{ summary: string; videos: string[]; title: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [locationLabelByPostId, setLocationLabelByPostId] = useState<Record<string, string>>({});
+
+  const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+
+  const reverseGeocode = async (lat: number, lng: number): Promise<string | null> => {
+    try {
+      if (!MAPBOX_TOKEN) return null;
+      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?types=place,locality,region,country&limit=5&access_token=${MAPBOX_TOKEN}`;
+      const resp = await fetch(url);
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      const features: any[] = Array.isArray(data?.features) ? data.features : [];
+      if (!features.length) return null;
+
+      // Prefer place (city), then locality (town), then region, then country
+      const preferred = ['place', 'locality', 'region', 'country'];
+      const pick = preferred
+        .map(t => features.find(f => (f?.place_type || f?.placeType || []).includes(t)))
+        .find(Boolean) as any | undefined;
+
+      const main = pick?.text || pick?.place_name || null;
+      const ctx = Array.isArray(pick?.context) ? pick.context : Array.isArray(features[0]?.context) ? features[0].context : [];
+      const region = ctx.find((c: any) => String(c?.id || '').startsWith('region.'))?.text;
+      const country = ctx.find((c: any) => String(c?.id || '').startsWith('country.'))?.text;
+
+      const parts = [main, region, country].filter(Boolean);
+      if (!parts.length) return null;
+      return parts.join(', ');
+    } catch {
+      return null;
+    }
+  };
 
   // Update filtered posts when posts change
   useEffect(() => {
@@ -78,19 +110,49 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
       if (arr.length > chosen.length) { chosen = arr; chosenKey = k; }
     }
     if (!chosenKey || !chosen.length) { setLocationSummary(null); return; }
-    const title = `Location ${chosenKey}`;
+
+    const [latStr, lngStr] = chosenKey.split(',');
+    const latNum = Number(latStr);
+    const lngNum = Number(lngStr);
+
     const newsText = chosen.filter(p => p.type !== 'video').map(p => p.ai_summary || p.content).filter(Boolean).join('\n\n');
     const videos = chosen.filter(p => p.type === 'video' || p.content_type === 'media' || !!p.media_url)
       .map(p => (p.media_url?.startsWith('ipfs://') ? `https://ipfs.io/ipfs/${p.media_url.replace('ipfs://','')}` : p.media_url || p.ipfs_post_url))
       .filter(Boolean) as string[];
+
     (async () => {
       try {
-        const ai = await aiSummaryService.generateSummary({ mediaType: 'news', content: newsText || 'No news content provided.' });
+        const [ai, placeName] = await Promise.all([
+          aiSummaryService.generateSummary({ mediaType: 'news', content: newsText || 'No news content provided.' }),
+          reverseGeocode(latNum, lngNum)
+        ]);
+        const title = placeName ? placeName : 'Location:';
         setLocationSummary({ summary: ai.summary, videos: videos.slice(0, 3), title });
       } catch {
+        const title = 'Location:';
         setLocationSummary({ summary: 'Summary unavailable.', videos: videos.slice(0, 3), title });
       }
     })();
+  }, [filteredPosts]);
+
+  // Compute location labels for visible posts (top 24)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const visible = filteredPosts.slice(0, 24);
+      const updates: Record<string, string> = {};
+      for (const p of visible) {
+        const key = `${Number(p.lat).toFixed(4)},${Number(p.lng).toFixed(4)}`;
+        if (locationLabelByPostId[p.id]) continue;
+        const name = await reverseGeocode(Number(p.lat), Number(p.lng));
+        if (cancelled) return;
+        if (name) updates[p.id] = name;
+      }
+      if (Object.keys(updates).length) {
+        setLocationLabelByPostId(prev => ({ ...prev, ...updates }));
+      }
+    })();
+    return () => { cancelled = true; };
   }, [filteredPosts]);
 
   const handleSetFilter = (filter: FilterType) => {
@@ -128,10 +190,10 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
     <div className="bg-transparent rounded-lg p-6">
       {locationSummary && (
         <div className="mb-6">
-          <h3 className="text-lg font-semibold text-white mb-2">{locationSummary.title}</h3>
+          <h3 className="text-lg font-normal text-white mb-2">{locationSummary.title}</h3>
           <div className="flex gap-3">
             <div className="flex-1 text-sm text-gray-300 leading-relaxed max-h-40 overflow-auto">
-              <div className="font-medium mb-1 text-gold">AI Summary</div>
+              <div className="mb-1 text-gold">AI Summary</div>
               <div>{locationSummary.summary}</div>
             </div>
             <div className="w-40 space-y-2">
@@ -144,91 +206,91 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
           </div>
         </div>
       )}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-white">Global Feed</h2>
-          <p className="text-gray-300 text-sm">
-            {filteredPosts.length} of {posts.length} stories
-          </p>
-          {posts.length === 0 && (
-            <p className="text-xs text-gray-400 mt-1">
-              No posts available yet
+      <div className="sticky top-0 z-10 -mx-6 px-6 py-3 mb-3 backdrop-blur-md bg-black/30 border-b border-white/10">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-normal text-white tracking-tight leading-tight">Global Feed</h2>
+            <p className="text-gray-300 text-sm">
+              {filteredPosts.length} of {posts.length} stories
             </p>
-          )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setShowFilters(!showFilters)} 
+              className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/15 rounded-full transition text-white ring-1 ring-inset ring-white/10"
+            >
+              <Filter className="w-4 h-4" />
+              <span className="text-sm">Filters</span>
+            </button>
+            <button 
+              onClick={() => {
+                setSearchTerm('');
+                setActiveFilter('all');
+                onFilterChange?.({ tag: undefined, type: undefined });
+              }}
+              className="px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm rounded-full transition shadow-sm"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
-        <div className="flex items-center space-x-2">
-          <button 
-            onClick={() => setShowFilters(!showFilters)} 
-            className="flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-white"
-          >
-            <Filter className="w-4 h-4" />
-            <span className="text-sm font-medium">Filters</span>
-          </button>
-          <button 
-            onClick={() => {
-              setSearchTerm('');
-              setActiveFilter('all');
-              onFilterChange?.({ tag: undefined, type: undefined });
-            }}
-            className="flex items-center space-x-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
-          >
-            <span className="text-sm font-medium">Refresh</span>
-          </button>
-        </div>
+        {showFilters && (
+          <div className="mt-4 space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search stories..."
+                value={selectedTag ?? searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); onFilterChange?.({ tag: e.target.value || undefined }); }}
+                className="w-full pl-10 pr-4 py-2 rounded-full bg-white/10 text-white placeholder-gray-400 ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-gold focus:outline-none"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(['all', 'video', 'news', 'text'] as FilterType[]).map(filter => (
+                <button
+                  key={filter}
+                  onClick={() => handleSetFilter(filter)}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition ${
+                    (selectedType || activeFilter) === filter
+                      ? 'bg-gold text-gray-900 shadow'
+                      : 'bg-white/10 text-gray-200 hover:bg-white/15 ring-1 ring-inset ring-white/10'
+                  }`}
+                >
+                  {getFilterIcon(filter)}
+                  <span>{getFilterLabel(filter)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {showFilters && (
-        <div className="mb-6 space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Search stories..."
-              value={selectedTag ?? searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); onFilterChange?.({ tag: e.target.value || undefined }); }}
-              className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-gold focus:border-transparent bg-gray-800 text-white placeholder-gray-400"
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {(['all', 'video', 'news', 'text'] as FilterType[]).map(filter => (
-              <button
-                key={filter}
-                onClick={() => handleSetFilter(filter)}
-                className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  (selectedType || activeFilter) === filter
-                    ? 'bg-gold text-gray-900'
-                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                }`}
-              >
-                {getFilterIcon(filter)}
-                <span>{getFilterLabel(filter)}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {filteredPosts.length > 0 ? (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
           {filteredPosts.map(post => (
-            <StoryCard key={post.id} post={post} onClick={onPostClick ? () => onPostClick(post) : undefined} />
+            <StoryCard
+              key={post.id}
+              post={post}
+              onClick={onPostClick ? () => onPostClick(post) : undefined}
+              locationLabel={locationLabelByPostId[post.id]}
+            />
           ))}
         </div>
       ) : isLoading ? (
         <div className="text-center py-12">
-          <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-            <div className="w-8 h-8 border-4 border-gray-600 border-t-gold rounded-full animate-spin"></div>
+          <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 ring-1 ring-inset ring-white/10">
+            <div className="w-8 h-8 border-4 border-white/20 border-t-gold rounded-full animate-spin"></div>
           </div>
-          <h3 className="text-lg font-medium text-white mb-2">Loading stories...</h3>
+          <h3 className="text-lg font-normal text-white mb-2">Loading stories...</h3>
           <p className="text-gray-300">Please wait while we fetch the latest stories</p>
         </div>
       ) : (
         <div className="text-center py-12">
-          <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Search className="w-8 h-8 text-gray-400" />
+          <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 ring-1 ring-inset ring-white/10">
+            <Search className="w-8 h-8 text-gray-300" />
           </div>
-          <h3 className="text-lg font-medium text-white mb-2">No stories found</h3>
+          <h3 className="text-lg font-normal text-white mb-2">No stories found</h3>
           <p className="text-gray-300">
             {(selectedTag ?? searchTerm) || (selectedType ?? activeFilter) !== 'all' 
               ? 'Try adjusting your search or filters'
@@ -237,7 +299,7 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
                 : 'No stories match your current filters'}
           </p>
           {posts.length === 0 && (
-            <div className="mt-4 p-4 bg-blue-900/30 rounded-lg border border-blue-700">
+            <div className="mt-4 p-4 bg-blue-900/30 rounded-lg border border-blue-700/50">
               <p className="text-sm text-blue-200 mb-2">
                 <strong>Getting started:</strong>
               </p>
@@ -249,7 +311,7 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
             </div>
           )}
           {posts.length > 0 && filteredPosts.length === 0 && (
-            <div className="mt-4 p-4 bg-yellow-900/30 rounded-lg border border-yellow-700">
+            <div className="mt-4 p-4 bg-yellow-900/30 rounded-lg border border-yellow-700/50">
               <p className="text-sm text-yellow-200 mb-3">
                 <strong>Tip:</strong> Try clearing your filters or adjusting your search terms
               </p>
@@ -259,7 +321,7 @@ export default function StoryFeed({ posts, onPostClick, selectedTag, selectedTyp
                   setActiveFilter('all');
                   onFilterChange?.({ tag: undefined, type: undefined });
                 }}
-                className="px-4 py-2 bg-yellow-800 hover:bg-yellow-700 text-yellow-100 text-sm rounded-lg transition-colors"
+                className="px-4 py-2 bg-yellow-800/80 hover:bg-yellow-700 text-yellow-100 text-sm rounded-full transition"
               >
                 Clear All Filters
               </button>
