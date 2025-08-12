@@ -45,7 +45,7 @@ export default function SubmissionForm({ isOpen, onClose, lat, lng, onPostCreate
   const [geocodeName, setGeocodeName] = useState<string | null>(null);
   const dynamicCtx = useDynamicContext() as unknown as { sdk?: any; primaryWallet?: { address: string } };
   const ENABLE_NFT_MINT = process.env.NEXT_PUBLIC_ENABLE_NFT_MINT === '1';
-  const [rewardToast, setRewardToast] = useState<{ amountXRP?: string; txHash?: string } | null>(null);
+  const [rewardToast, setRewardToast] = useState<{ amountXRP?: string; txHash?: string; chain?: 'xrpl' | 'evm' } | null>(null);
   const [xrplBalanceXrp, setXrplBalanceXrp] = useState<string | null>(null);
 
   const isAuthenticated = wallet && wallet.isConnected;
@@ -197,23 +197,44 @@ export default function SubmissionForm({ isOpen, onClose, lat, lng, onPostCreate
         // After post created, optimistically fetch XRPL balance and show reward toast if we have a tx
         try {
           const userSession = localStorage.getItem('kleo_user_session');
+          
           const parsed = userSession ? JSON.parse(userSession) as { xrpl_address?: string } : {};
           const xrplAddr = parsed?.xrpl_address;
+          
           // Attempt to retrieve last reward response stored by createKleoPost flow via sessionStorage
           const lastRewardJson = sessionStorage.getItem('kleo_last_reward_tx');
-          if (xrplAddr) {
-            const drops = await fetchXrplBalanceDrops(xrplAddr);
-            const xrp = (drops / 1_000_000).toFixed(6);
-            setXrplBalanceXrp(xrp);
-          }
+          
           if (lastRewardJson) {
-            const info = JSON.parse(lastRewardJson) as { ok?: boolean; txHash?: string; amountDrops?: string };
+            const info = JSON.parse(lastRewardJson) as { ok?: boolean; txHash?: string; amountDrops?: string; amountWei?: string; chain?: 'xrpl' | 'evm' };
+            
             if (info?.ok) {
-              const amountXRP = info.amountDrops ? (Number(info.amountDrops) / 1_000_000).toFixed(6) : undefined;
-              setRewardToast({ amountXRP, txHash: info.txHash });
+              let amountXRP: string | undefined;
+              let txHash = info.txHash;
+              
+              if (info.chain === 'xrpl' && info.amountDrops) {
+                amountXRP = (Number(info.amountDrops) / 1_000_000).toFixed(6);
+              } else if (info.chain === 'evm' && info.amountWei) {
+                // Convert wei to XRP equivalent for display (18 decimals)
+                const weiPerXRP = BigInt('1000000000000000000'); // 1 XRP in wei
+                const amountWei = BigInt(info.amountWei);
+                const million = BigInt('1000000');
+                const xrpEquivalent = Number((amountWei * million) / weiPerXRP) / 1000000;
+                amountXRP = xrpEquivalent.toFixed(6);
+              }
+              
+              setRewardToast({ amountXRP, txHash, chain: info.chain });
               setTimeout(() => setRewardToast(null), 6000);
               sessionStorage.removeItem('kleo_last_reward_tx');
             }
+          }
+          
+          // Fetch balance for XRPL wallets
+          if (xrplAddr) {
+            try {
+              const drops = await fetchXrplBalanceDrops(xrplAddr);
+              const xrp = (drops / 1_000_000).toFixed(6);
+              setXrplBalanceXrp(xrp);
+            } catch {}
           }
         } catch {}
       } else { setError('Failed to create post. Please try again.'); }
@@ -270,15 +291,38 @@ export default function SubmissionForm({ isOpen, onClose, lat, lng, onPostCreate
           {/* Reward toast */}
           {rewardToast && (
             <div className="mb-4 p-3 rounded-md bg-green-50 border border-green-200 text-green-800 text-sm">
-              <div className="font-medium">Reward sent on XRPL Testnet</div>
-              <div className="mt-1">{rewardToast.amountXRP ? `${rewardToast.amountXRP} XRP` : 'A small reward'} has been sent.</div>
+              <>
+                <div className="font-medium">Reward sent successfully!</div>
+                <div className="mt-1">{rewardToast.amountXRP ? `${rewardToast.amountXRP} XRP equivalent` : 'A small reward'} has been sent.</div>
+              </>
               {rewardToast.txHash && (
-                <a className="mt-1 inline-block text-green-700 underline" href={`https://testnet.xrpl.org/transactions/${rewardToast.txHash}`} target="_blank" rel="noreferrer">
-                  View transaction
-                </a>
+                <div className="mt-2 space-y-1">
+                  {rewardToast.chain === 'evm' ? (
+                    <a 
+                      className="inline-block text-green-700 underline text-xs" 
+                      href={`https://explorer.testnet.xrplevm.org/tx/${rewardToast.txHash}`} 
+                      target="_blank" 
+                      rel="noreferrer"
+                    >
+                      View transaction on XRPL EVM Explorer
+                    </a>
+                  ) : (
+                    <a 
+                      className="inline-block text-green-700 underline text-xs" 
+                      href={`https://testnet.xrpl.org/transactions/${rewardToast.txHash}`} 
+                      target="_blank" 
+                      rel="noreferrer"
+                    >
+                      View transaction on XRPL Testnet Explorer
+                    </a>
+                  )}
+                  <div className="text-xs text-green-600">
+                    {rewardToast.chain === 'evm' ? 'Check your MetaMask wallet for the balance update' : 'Use an XRPL wallet to see your XRP balance'}
+                  </div>
+                </div>
               )}
               {xrplBalanceXrp && (
-                <div className="mt-1 text-xs text-green-700">Current wallet balance (approx): {xrplBalanceXrp} XRP</div>
+                <div className="mt-1 text-xs text-green-700">Current XRPL wallet balance (approx): {xrplBalanceXrp} XRP</div>
               )}
             </div>
           )}

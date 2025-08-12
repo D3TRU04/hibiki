@@ -20,22 +20,15 @@ export interface UserXP {
 // Calculate reward points based on post type and user status
 export function calculateRewardPoints(post: KleoPost, user?: User): number {
   let points = XP_CONFIG.BASE_POST;
-  
-  // AI-verified news content (infer from content_type or presence of source_url)
   if (post.content_type === 'news' && post.is_reliable) {
     points += XP_CONFIG.AI_VERIFIED_NEWS;
   }
-  
-  // Video upload
   if (post.type === 'video') {
     points += XP_CONFIG.VIDEO_UPLOAD;
   }
-  
-  // Wallet/email paired bonus
   if (user && user.wallet_address && user.email) {
     points += XP_CONFIG.WALLET_EMAIL_PAIRED;
   }
-  
   return points;
 }
 

@@ -341,7 +341,8 @@ export async function createKleoPost(postData: PostSubmission, wallet: Wallet): 
 
     // Record XP and proofs
     const { calculateRewardPoints, addUserXP, recordPostProof } = await import('../rewards/rewards');
-    const user = await getCurrentUser(); // Get user for email bonus
+    const user = await getCurrentUser();
+    
     const points = calculateRewardPoints(kleoPost, { wallet_address: wallet.address, email: user?.email } as User);
     addUserXP(wallet.address, points);
     await recordPostProof(kleoPost.ipfs_metadata_url!, wallet.address);
@@ -349,13 +350,11 @@ export async function createKleoPost(postData: PostSubmission, wallet: Wallet): 
     // Best-effort reward payment (XRPL L1 or EVM sidechain)
     try {
       if (user?.xrpl_address) {
-        // XRPL L1 path
         const rewardRes = await distributeRewards(user.xrpl_address, points, 'Kleo: content contribution reward');
         if (typeof window !== 'undefined' && rewardRes && (rewardRes as any).ok) {
           sessionStorage.setItem('kleo_last_reward_tx', JSON.stringify({ ...(rewardRes as any), chain: 'xrpl' }));
         }
       } else if (wallet?.address && wallet.address.startsWith('0x')) {
-        // EVM sidechain fallback
         const evmRes = await distributeEvmRewards(wallet.address, points);
         if (typeof window !== 'undefined' && evmRes && (evmRes as any).ok) {
           sessionStorage.setItem('kleo_last_reward_tx', JSON.stringify({ ...(evmRes as any), chain: 'evm' }));
@@ -372,17 +371,12 @@ export async function createKleoPost(postData: PostSubmission, wallet: Wallet): 
 
 export async function getCurrentUser(): Promise<User | null> {
   try {
-    // Check local storage for user session
     if (!isBrowser) return null;
-    
     const sessionData = localStorage.getItem(USER_SESSION_KEY);
     if (sessionData) {
       const user = JSON.parse(sessionData);
-      // Verify user still exists in IPFS
       const verifiedUser = await ipfsStorage.getUser(user.id);
-      if (verifiedUser) {
-        return verifiedUser;
-      }
+      if (verifiedUser) return verifiedUser;
     }
     return null;
   } catch (error) {
