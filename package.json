@@ -12,13 +12,7 @@
     "lint": "next lint",
     "lint:fix": "next lint --fix",
     "rebuild": "npm rebuild",
-    "clean": "rm -rf .next && rm -rf node_modules/.cache",
-    "build:clean": "npm run clean && npm run build:fast",
-    "deploy:contract": "npx hardhat run scripts/deploy-nft.js --network rippleEVMTestnet",
-    "deploy:contract:mainnet": "npx hardhat run scripts/deploy-nft.js --network rippleEVMMainnet",
-    "compile:contract": "npx hardhat compile",
-    "test:contract": "npx hardhat test",
-    "verify:contract": "npx hardhat verify --network rippleEVMTestnet"
+    "clean": "rm -rf .next && rm -rf node_modules/.cache"
   },
   "dependencies": {
     "@dynamic-labs/ethereum": "^0.18.30",
@@ -40,8 +34,6 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
-    "@openzeppelin/contracts": "^4.9.5",
     "@tailwindcss/postcss": "^4.1.11",
     "@types/jsdom": "^21.1.7",
     "@types/node": "^20",
@@ -53,7 +45,6 @@
     "dotenv": "^17.2.1",
     "eslint": "^9",
     "eslint-config-next": "15.4.5",
-    "hardhat": "^2.26.2",
     "stream-browserify": "^3.0.0",
     "tailwindcss": "^4.1.11",
     "typescript": "^5"
